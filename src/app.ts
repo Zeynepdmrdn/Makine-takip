@@ -1,9 +1,16 @@
 import "reflect-metadata";
 import express from "express";
 import { AppDataSource } from "./database/data-source";
+import { machineRouter } from "./routes/machineRoutes";
 
 // Create an Express application
 const app = express();
+
+// Parse incoming JSON request bodies
+app.use(express.json());
+
+// Register machine routes
+app.use("/machines", machineRouter);
 
 // Define the port where the server will run
 const PORT = 3000;
