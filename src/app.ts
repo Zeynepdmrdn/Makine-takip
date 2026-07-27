@@ -1,10 +1,18 @@
 import "reflect-metadata";
+import cors from "cors";
 import express from "express";
 import { AppDataSource } from "./database/data-source";
 import { machineRouter } from "./routes/machineRoutes";
 
 // Create an Express application
 const app = express();
+
+// Allow requests from the frontend development server
+app.use(
+  cors({
+    origin: "http://localhost:5173",
+  }),
+);
 
 // Parse incoming JSON request bodies
 app.use(express.json());

@@ -37,6 +37,9 @@ export class MachineService {
     const machineRepository = AppDataSource.getRepository(Machine);
 
     return machineRepository.find({
+      relations: {
+        statuses: true,
+      },
       order: {
         id: "ASC",
       },
