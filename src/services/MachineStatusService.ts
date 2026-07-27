@@ -48,6 +48,10 @@ export class MachineStatusService {
 
       const newStartedAt = new Date();
 
+      if (currentStatus && newStartedAt.getTime() < currentStatus.startedAt.getTime()) {
+        throw new AppError("The new status cannot start before the current status", 400);
+      }
+
       if (currentStatus) {
         currentStatus.endedAt = newStartedAt;
         await statusRepository.save(currentStatus);
