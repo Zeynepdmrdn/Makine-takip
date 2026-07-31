@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "tsx watch src/app.ts",
+    "dev": "concurrently --kill-others-on-fail --names backend,frontend \"npm run dev:backend\" \"npm run dev:frontend\"",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/app.js",
     "type-check": "tsc --noEmit",
@@ -13,7 +13,9 @@
     "format": "prettier --write .",
     "format-check": "prettier --check .",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "dev:backend": "tsx watch src/app.ts",
+    "dev:frontend": "npm --prefix frontend run dev"
   },
   "keywords": [],
   "author": "",
@@ -32,6 +34,7 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^26.1.1",
+    "concurrently": "^10.0.4",
     "eslint": "^10.7.0",
     "prettier": "^3.9.6",
     "tsx": "^4.23.1",
