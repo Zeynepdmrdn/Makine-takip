@@ -9,6 +9,7 @@ import {
   YAxis,
 } from "recharts";
 import type { Machine } from "../types/machine";
+import { API_BASE_URL } from "../config/api";
 import type { SensorReading } from "../types/sensor";
 
 interface SensorDialogProps {
@@ -90,8 +91,7 @@ export function SensorDialog({
   useEffect(() => {
     let isCancelled = false;
 
-    fetch(`http://localhost:3000/machines/${machine.id}/readings`)
-      .then(async (response) => {
+    fetch(`${API_BASE_URL}/machines/${machine.id}/readings`)       .then(async (response) => {
         if (!response.ok) {
           throw new Error("Sensor readings could not be loaded.");
         }

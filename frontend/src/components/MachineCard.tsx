@@ -5,6 +5,7 @@ import type {
   MachineStatusType,
 } from "../types/machine";
 import { SensorDialog } from "./SensorDialog";
+import { API_BASE_URL } from "../config/api";
 import { StatusDialog } from "./StatusDialog";
 
 interface MachineCardProps {
@@ -47,8 +48,7 @@ export function MachineCard({
         });
 
         const response = await fetch(
-          `http://localhost:3000/machines/${machine.id}/availability?${query.toString()}`,
-        );
+`         ${API_BASE_URL}/machines/${machine.id}/availability?${query.toString()}`        );
 
         if (!response.ok) {
           throw new Error("Availability could not be loaded");

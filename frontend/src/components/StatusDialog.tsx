@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { API_BASE_URL } from "../config/api";
 import type { Machine, MachineStatusType } from "../types/machine";
 
 interface StatusDialogProps {
@@ -23,7 +24,9 @@ export function StatusDialog({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (
+    event: FormEvent<HTMLFormElement>,
+  ): Promise<void> => {
     event.preventDefault();
     setErrorMessage(null);
 
@@ -41,7 +44,7 @@ export function StatusDialog({
       setIsSubmitting(true);
 
       const response = await fetch(
-        `http://localhost:3000/machines/${machine.id}/status`,
+        `${API_BASE_URL}/machines/${machine.id}/status`,
         {
           method: "POST",
           headers: {
@@ -61,7 +64,9 @@ export function StatusDialog({
       const data = (await response.json()) as ErrorResponse;
 
       if (!response.ok) {
-        throw new Error(data.message ?? "Machine status could not be changed.");
+        throw new Error(
+          data.message ?? "Machine status could not be changed.",
+        );
       }
 
       await onStatusChanged();
@@ -96,7 +101,7 @@ export function StatusDialog({
             </h2>
 
             <p className="mt-1 text-sm text-slate-500">
-              {machine.name} · {machine.code}
+              {machine.name} - {machine.code}
             </p>
           </div>
 
@@ -106,7 +111,7 @@ export function StatusDialog({
             className="rounded-lg px-3 py-1 text-slate-500 hover:bg-slate-100"
             aria-label="Close status dialog"
           >
-            ×
+            X
           </button>
         </div>
 
@@ -170,7 +175,8 @@ export function StatusDialog({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              disabled={isSubmitting}
+              className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
               Cancel
             </button>

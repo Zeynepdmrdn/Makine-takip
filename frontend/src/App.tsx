@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { MachineCard } from "./components/MachineCard";
 import type { Machine } from "./types/machine";
+import { API_BASE_URL } from "./config/api";
 
 const fetchMachines = async (): Promise<Machine[]> => {
-  const response = await fetch("http://localhost:3000/machines");
-
+  const response = await fetch(`${API_BASE_URL}/machines`);
   if (!response.ok) {
     throw new Error("Machines could not be loaded");
   }
