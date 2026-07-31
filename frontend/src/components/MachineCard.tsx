@@ -4,6 +4,7 @@ import type {
   MachineAvailability,
   MachineStatusType,
 } from "../types/machine";
+import { SensorDialog } from "./SensorDialog";
 import { StatusDialog } from "./StatusDialog";
 
 interface MachineCardProps {
@@ -24,7 +25,8 @@ export function MachineCard({
   onStatusChanged,
 }: MachineCardProps) {
   const [availability, setAvailability] = useState<number | null>(null);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
+  const [isSensorDialogOpen, setIsSensorDialogOpen] = useState(false);
 
   const currentStatusRecord = machine.statuses.find(
     (status) => status.endedAt === null,
@@ -92,14 +94,22 @@ export function MachineCard({
           </p>
         </div>
 
-        <div className="mt-5 flex items-center justify-between gap-4">
-          <p className="text-sm text-slate-500">
-            Machine ID: {machine.id}
-          </p>
+        <p className="mt-4 text-sm text-slate-500">
+          Machine ID: {machine.id}
+        </p>
+
+        <div className="mt-5 flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={() => setIsSensorDialogOpen(true)}
+            className="rounded-xl border border-blue-600 px-4 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-50"
+          >
+            View Sensors
+          </button>
 
           <button
             type="button"
-            onClick={() => setIsDialogOpen(true)}
+            onClick={() => setIsStatusDialogOpen(true)}
             className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
           >
             Change Status
@@ -107,11 +117,18 @@ export function MachineCard({
         </div>
       </article>
 
-      {isDialogOpen && (
+      {isStatusDialogOpen && (
         <StatusDialog
           machine={machine}
-          onClose={() => setIsDialogOpen(false)}
+          onClose={() => setIsStatusDialogOpen(false)}
           onStatusChanged={onStatusChanged}
+        />
+      )}
+
+      {isSensorDialogOpen && (
+        <SensorDialog
+          machine={machine}
+          onClose={() => setIsSensorDialogOpen(false)}
         />
       )}
     </>
