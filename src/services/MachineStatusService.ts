@@ -3,6 +3,7 @@ import { AppDataSource } from "../database/data-source";
 import { Machine } from "../entities/Machine";
 import { MachineStatus, MachineStatusType } from "../entities/MachineStatus";
 import { AppError } from "../errors/AppError";
+import { calculateAvailability } from "../utils/calculateAvailability";
 
 export interface ChangeMachineStatusInput {
   machineId: number;
@@ -67,5 +68,34 @@ export class MachineStatusService {
 
       return statusRepository.save(newStatus);
     });
+  }
+
+  // Calculates availability for a machine in a given time range
+  async getAvailability(machineId: number, from: Date, to: Date): Promise<number> {
+    if (from.getTime() >= to.getTime()) {
+      throw new AppError("The from date must be earlier than the to date", 400);
+    }
+
+    const machineRepository = AppDataSource.getRepository(Machine);
+    const statusRepository = AppDataSource.getRepository(MachineStatus);
+
+    const machine = await machineRepository.findOneBy({
+      id: machineId,
+    });
+
+    if (!machine) {
+      throw new AppError("Machine not found", 404);
+    }
+
+    const statuses = await statusRepository.find({
+      where: {
+        machineId,
+      },
+      order: {
+        startedAt: "ASC",
+      },
+    });
+
+    return calculateAvailability(statuses, from, to);
   }
 }

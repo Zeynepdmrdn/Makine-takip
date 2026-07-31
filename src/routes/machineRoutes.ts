@@ -3,6 +3,7 @@ import {
   changeMachineStatus,
   createMachine,
   getAllMachines,
+  getMachineAvailability,
   getMachineById,
 } from "../controllers/MachineController";
 import { createSensorReading, getSensorReadings } from "../controllers/SensorReadingController";
@@ -23,6 +24,9 @@ machineRouter.get("/:id/readings", getSensorReadings);
 
 // Changes the status of a machine
 machineRouter.post("/:id/status", changeMachineStatus);
+
+// Returns machine availability for a time range
+machineRouter.get("/:id/availability", getMachineAvailability);
 
 // Returns one machine by ID
 machineRouter.get("/:id", getMachineById);

@@ -117,3 +117,40 @@ export const changeMachineStatus = async (request: Request, response: Response):
     handleError(error, response);
   }
 };
+
+// Returns machine availability for a given time range
+export const getMachineAvailability = async (
+  request: Request,
+  response: Response,
+): Promise<void> => {
+  try {
+    const machineId = Number(request.params.id);
+    const { from, to } = request.query;
+
+    if (!Number.isInteger(machineId) || machineId <= 0) {
+      throw new AppError("Machine ID must be a positive integer", 400);
+    }
+
+    if (typeof from !== "string" || typeof to !== "string") {
+      throw new AppError("The from and to query parameters are required", 400);
+    }
+
+    const fromDate = new Date(from);
+    const toDate = new Date(to);
+
+    if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime())) {
+      throw new AppError("The from and to values must be valid dates", 400);
+    }
+
+    const availability = await machineStatusService.getAvailability(machineId, fromDate, toDate);
+
+    response.status(200).json({
+      machineId,
+      from: fromDate.toISOString(),
+      to: toDate.toISOString(),
+      availability,
+    });
+  } catch (error) {
+    handleError(error, response);
+  }
+};

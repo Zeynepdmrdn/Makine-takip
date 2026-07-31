@@ -1,32 +1,59 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { MachineCard } from "./components/MachineCard";
 import type { Machine } from "./types/machine";
+
+const fetchMachines = async (): Promise<Machine[]> => {
+  const response = await fetch("http://localhost:3000/machines");
+
+  if (!response.ok) {
+    throw new Error("Machines could not be loaded");
+  }
+
+  return (await response.json()) as Machine[];
+};
 
 function App() {
   const [machines, setMachines] = useState<Machine[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const loadMachines = useCallback(async () => {
+    try {
+      const data = await fetchMachines();
+
+      setMachines(data);
+      setErrorMessage(null);
+    } catch (error) {
+      console.error("Failed to load machines:", error);
+      setErrorMessage("Machines could not be loaded. Please try again.");
+    }
+  }, []);
+
   useEffect(() => {
-    const loadMachines = async () => {
-      try {
-        const response = await fetch("http://localhost:3000/machines");
+    let isCancelled = false;
 
-        if (!response.ok) {
-          throw new Error("Machines could not be loaded");
+    fetchMachines()
+      .then((data) => {
+        if (!isCancelled) {
+          setMachines(data);
+          setErrorMessage(null);
         }
+      })
+      .catch((error: unknown) => {
+        if (!isCancelled) {
+          console.error("Failed to load machines:", error);
+          setErrorMessage("Machines could not be loaded. Please try again.");
+        }
+      })
+      .finally(() => {
+        if (!isCancelled) {
+          setIsLoading(false);
+        }
+      });
 
-        const data = (await response.json()) as Machine[];
-        setMachines(data);
-      } catch (error) {
-        console.error("Failed to load machines:", error);
-        setErrorMessage("Machines could not be loaded. Please try again.");
-      } finally {
-        setIsLoading(false);
-      }
+    return () => {
+      isCancelled = true;
     };
-
-    void loadMachines();
   }, []);
 
   return (
@@ -67,7 +94,11 @@ function App() {
         {!isLoading && !errorMessage && machines.length > 0 && (
           <section className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {machines.map((machine) => (
-              <MachineCard key={machine.id} machine={machine} />
+              <MachineCard
+                key={machine.id}
+                machine={machine}
+                onStatusChanged={loadMachines}
+              />
             ))}
           </section>
         )}

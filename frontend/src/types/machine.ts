@@ -16,3 +16,10 @@ export interface Machine {
   createdAt: string;
   statuses: MachineStatus[];
 }
+
+export interface MachineAvailability {
+  machineId: number;
+  from: string;
+  to: string;
+  availability: number;
+}
