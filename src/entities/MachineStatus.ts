@@ -6,7 +6,7 @@ export enum MachineStatusType {
   RUNNING = "RUNNING",
   DOWN = "DOWN",
   SETUP = "SETUP",
-  IDLE = "IDLE", //boşta bekleme
+  IDLE = "IDLE", // Waiting without producing
 }
 
 // Represents a machine status record
