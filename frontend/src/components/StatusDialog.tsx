@@ -12,21 +12,13 @@ interface ErrorResponse {
   message?: string;
 }
 
-export function StatusDialog({
-  machine,
-  onClose,
-  onStatusChanged,
-}: StatusDialogProps) {
-  const [selectedStatus, setSelectedStatus] = useState<
-    MachineStatusType | ""
-  >("");
+export function StatusDialog({ machine, onClose, onStatusChanged }: StatusDialogProps) {
+  const [selectedStatus, setSelectedStatus] = useState<MachineStatusType | "">("");
   const [reason, setReason] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = async (
-    event: FormEvent<HTMLFormElement>,
-  ): Promise<void> => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
     setErrorMessage(null);
 
@@ -43,39 +35,32 @@ export function StatusDialog({
     try {
       setIsSubmitting(true);
 
-      const response = await fetch(
-        `${API_BASE_URL}/machines/${machine.id}/status`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            status: selectedStatus,
-            ...(selectedStatus === "DOWN"
-              ? {
-                  reason: reason.trim(),
-                }
-              : {}),
-          }),
+      const response = await fetch(`${API_BASE_URL}/machines/${machine.id}/status`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      );
+        body: JSON.stringify({
+          status: selectedStatus,
+          ...(selectedStatus === "DOWN"
+            ? {
+                reason: reason.trim(),
+              }
+            : {}),
+        }),
+      });
 
       const data = (await response.json()) as ErrorResponse;
 
       if (!response.ok) {
-        throw new Error(
-          data.message ?? "Machine status could not be changed.",
-        );
+        throw new Error(data.message ?? "Machine status could not be changed.");
       }
 
       await onStatusChanged();
       onClose();
     } catch (error) {
       const message =
-        error instanceof Error
-          ? error.message
-          : "Machine status could not be changed.";
+        error instanceof Error ? error.message : "Machine status could not be changed.";
 
       setErrorMessage(message);
     } finally {
@@ -166,9 +151,7 @@ export function StatusDialog({
           )}
 
           {errorMessage && (
-            <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">
-              {errorMessage}
-            </p>
+            <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{errorMessage}</p>
           )}
 
           <div className="flex justify-end gap-3">

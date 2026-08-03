@@ -1,9 +1,5 @@
 import { useEffect, useState } from "react";
-import type {
-  Machine,
-  MachineAvailability,
-  MachineStatusType,
-} from "../types/machine";
+import type { Machine, MachineAvailability, MachineStatusType } from "../types/machine";
 import { SensorDialog } from "./SensorDialog";
 import { API_BASE_URL } from "../config/api";
 import { StatusDialog } from "./StatusDialog";
@@ -21,17 +17,12 @@ const statusStyles: Record<MachineStatusType | "UNKNOWN", string> = {
   UNKNOWN: "bg-slate-100 text-slate-500",
 };
 
-export function MachineCard({
-  machine,
-  onStatusChanged,
-}: MachineCardProps) {
+export function MachineCard({ machine, onStatusChanged }: MachineCardProps) {
   const [availability, setAvailability] = useState<number | null>(null);
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
   const [isSensorDialogOpen, setIsSensorDialogOpen] = useState(false);
 
-  const currentStatusRecord = machine.statuses.find(
-    (status) => status.endedAt === null,
-  );
+  const currentStatusRecord = machine.statuses.find((status) => status.endedAt === null);
 
   const currentStatus = currentStatusRecord?.status ?? "UNKNOWN";
   const currentStatusId = currentStatusRecord?.id;
@@ -48,7 +39,8 @@ export function MachineCard({
         });
 
         const response = await fetch(
-`         ${API_BASE_URL}/machines/${machine.id}/availability?${query.toString()}`        );
+          `         ${API_BASE_URL}/machines/${machine.id}/availability?${query.toString()}`,
+        );
 
         if (!response.ok) {
           throw new Error("Availability could not be loaded");
@@ -70,9 +62,7 @@ export function MachineCard({
       <article className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">
-              {machine.name}
-            </h2>
+            <h2 className="text-lg font-semibold text-slate-900">{machine.name}</h2>
 
             <p className="mt-1 text-sm text-slate-500">{machine.code}</p>
           </div>
@@ -94,9 +84,7 @@ export function MachineCard({
           </p>
         </div>
 
-        <p className="mt-4 text-sm text-slate-500">
-          Machine ID: {machine.id}
-        </p>
+        <p className="mt-4 text-sm text-slate-500">Machine ID: {machine.id}</p>
 
         <div className="mt-5 flex flex-wrap gap-3">
           <button
@@ -126,10 +114,7 @@ export function MachineCard({
       )}
 
       {isSensorDialogOpen && (
-        <SensorDialog
-          machine={machine}
-          onClose={() => setIsSensorDialogOpen(false)}
-        />
+        <SensorDialog machine={machine} onClose={() => setIsSensorDialogOpen(false)} />
       )}
     </>
   );

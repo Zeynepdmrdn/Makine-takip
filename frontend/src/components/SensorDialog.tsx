@@ -34,13 +34,7 @@ interface ChartPoint {
   recordedAt: string;
 }
 
-function SensorChart({
-  title,
-  unit,
-  dataKey,
-  color,
-  data,
-}: SensorChartProps) {
+function SensorChart({ title, unit, dataKey, color, data }: SensorChartProps) {
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5">
       <div className="mb-4">
@@ -80,10 +74,7 @@ function SensorChart({
   );
 }
 
-export function SensorDialog({
-  machine,
-  onClose,
-}: SensorDialogProps) {
+export function SensorDialog({ machine, onClose }: SensorDialogProps) {
   const [readings, setReadings] = useState<SensorReading[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -91,7 +82,8 @@ export function SensorDialog({
   useEffect(() => {
     let isCancelled = false;
 
-    fetch(`${API_BASE_URL}/machines/${machine.id}/readings`)       .then(async (response) => {
+    fetch(`${API_BASE_URL}/machines/${machine.id}/readings`)
+      .then(async (response) => {
         if (!response.ok) {
           throw new Error("Sensor readings could not be loaded.");
         }
@@ -125,8 +117,7 @@ export function SensorDialog({
     return [...readings]
       .sort(
         (first, second) =>
-          new Date(first.recordedAt).getTime() -
-          new Date(second.recordedAt).getTime(),
+          new Date(first.recordedAt).getTime() - new Date(second.recordedAt).getTime(),
       )
       .map((reading) => ({
         id: reading.id,
@@ -176,15 +167,11 @@ export function SensorDialog({
         </div>
 
         {isLoading && (
-          <p className="mt-6 rounded-xl bg-white p-5 text-slate-600">
-            Loading sensor readings...
-          </p>
+          <p className="mt-6 rounded-xl bg-white p-5 text-slate-600">Loading sensor readings...</p>
         )}
 
         {errorMessage && (
-          <p className="mt-6 rounded-xl bg-red-50 p-5 text-red-700">
-            {errorMessage}
-          </p>
+          <p className="mt-6 rounded-xl bg-red-50 p-5 text-red-700">{errorMessage}</p>
         )}
 
         {!isLoading && !errorMessage && chartData.length === 0 && (
