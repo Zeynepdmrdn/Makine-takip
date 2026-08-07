@@ -1,5 +1,6 @@
 import { AppDataSource } from "../database/data-source";
 import { Machine } from "../entities/Machine";
+import { MachineStatus, MachineStatusType } from "../entities/MachineStatus";
 import { AppError } from "../errors/AppError";
 
 // Defines the data required to create a machine
@@ -9,7 +10,7 @@ export interface CreateMachineInput {
 }
 
 export class MachineService {
-  // Creates and saves a new machine
+  // Creates a machine with an initial IDLE status
   async createMachine(input: CreateMachineInput): Promise<Machine> {
     const machineRepository = AppDataSource.getRepository(Machine);
 
@@ -24,12 +25,32 @@ export class MachineService {
       throw new AppError("Machine code already exists", 400);
     }
 
-    const machine = machineRepository.create({
-      name: normalizedName,
-      code: normalizedCode,
-    });
+    return AppDataSource.transaction(async (manager) => {
+      const transactionMachineRepository = manager.getRepository(Machine);
 
-    return machineRepository.save(machine);
+      const statusRepository = manager.getRepository(MachineStatus);
+
+      const machine = transactionMachineRepository.create({
+        name: normalizedName,
+        code: normalizedCode,
+      });
+
+      const savedMachine = await transactionMachineRepository.save(machine);
+
+      const initialStatus = statusRepository.create({
+        machineId: savedMachine.id,
+        status: MachineStatusType.IDLE,
+        reason: null,
+        startedAt: new Date(),
+        endedAt: null,
+      });
+
+      const savedStatus = await statusRepository.save(initialStatus);
+
+      savedMachine.statuses = [savedStatus];
+
+      return savedMachine;
+    });
   }
 
   // Returns all machines ordered by ID
@@ -45,6 +66,7 @@ export class MachineService {
       },
     });
   }
+
   // Returns one machine with its statuses and sensor readings
   async getMachineById(id: number): Promise<Machine> {
     const machineRepository = AppDataSource.getRepository(Machine);

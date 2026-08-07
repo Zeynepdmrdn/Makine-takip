@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
+import { AddMachineDialog } from "./components/AddMachineDialog";
 import { MachineCard } from "./components/MachineCard";
-import type { Machine } from "./types/machine";
 import { API_BASE_URL } from "./config/api";
+import type { Machine } from "./types/machine";
 
 const fetchMachines = async (): Promise<Machine[]> => {
   const response = await fetch(`${API_BASE_URL}/machines`);
+
   if (!response.ok) {
     throw new Error("Machines could not be loaded");
   }
@@ -16,8 +18,9 @@ function App() {
   const [machines, setMachines] = useState<Machine[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isAddMachineDialogOpen, setIsAddMachineDialogOpen] = useState(false);
 
-  const loadMachines = useCallback(async () => {
+  const loadMachines = useCallback(async (): Promise<void> => {
     try {
       const data = await fetchMachines();
 
@@ -57,14 +60,26 @@ function App() {
   }, []);
 
   return (
-    <main className="min-h-screen bg-slate-100 px-6 py-10">
+    <main className="min-h-screen bg-slate-100 px-4 py-10">
       <div className="mx-auto max-w-6xl">
-        <header className="mb-8">
-          <p className="text-sm font-semibold uppercase tracking-wider text-blue-600">Mini MES</p>
+        <header className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-widest text-blue-600">
+              Mini MES
+            </p>
 
-          <h1 className="mt-2 text-3xl font-bold text-slate-900">Machine Dashboard</h1>
+            <h1 className="mt-2 text-3xl font-bold text-slate-900">Machine Dashboard</h1>
 
-          <p className="mt-2 text-slate-600">Monitor machine statuses and production data.</p>
+            <p className="mt-2 text-slate-600">Monitor machine statuses and production data.</p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsAddMachineDialogOpen(true)}
+            className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+          >
+            + Add Machine
+          </button>
         </header>
 
         {isLoading && (
@@ -85,6 +100,13 @@ function App() {
           </section>
         )}
       </div>
+
+      {isAddMachineDialogOpen && (
+        <AddMachineDialog
+          onClose={() => setIsAddMachineDialogOpen(false)}
+          onMachineCreated={loadMachines}
+        />
+      )}
     </main>
   );
 }
