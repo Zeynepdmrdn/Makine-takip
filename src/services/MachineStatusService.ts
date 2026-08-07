@@ -3,7 +3,7 @@ import { AppDataSource } from "../database/data-source";
 import { Machine } from "../entities/Machine";
 import { MachineStatus, MachineStatusType } from "../entities/MachineStatus";
 import { AppError } from "../errors/AppError";
-import { calculateAvailability } from "../utils/calculateAvailability";
+import { AvailabilityDetails, calculateAvailabilityDetails } from "../utils/calculateAvailability";
 
 export interface ChangeMachineStatusInput {
   machineId: number;
@@ -70,8 +70,8 @@ export class MachineStatusService {
     });
   }
 
-  // Calculates availability for a machine in a given time range
-  async getAvailability(machineId: number, from: Date, to: Date): Promise<number> {
+  // Calculates detailed availability data for a machine
+  async getAvailability(machineId: number, from: Date, to: Date): Promise<AvailabilityDetails> {
     if (from.getTime() >= to.getTime()) {
       throw new AppError("The from date must be earlier than the to date", 400);
     }
@@ -96,6 +96,6 @@ export class MachineStatusService {
       },
     });
 
-    return calculateAvailability(statuses, from, to);
+    return calculateAvailabilityDetails(statuses, from, to);
   }
 }

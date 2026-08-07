@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Machine, MachineAvailability, MachineStatusType } from "../types/machine";
-import { SensorDialog } from "./SensorDialog";
 import { API_BASE_URL } from "../config/api";
+import { SensorDialog } from "./SensorDialog";
 import { StatusDialog } from "./StatusDialog";
 
 interface MachineCardProps {
@@ -18,7 +18,8 @@ const statusStyles: Record<MachineStatusType | "UNKNOWN", string> = {
 };
 
 export function MachineCard({ machine, onStatusChanged }: MachineCardProps) {
-  const [availability, setAvailability] = useState<number | null>(null);
+  const [availability, setAvailability] = useState<MachineAvailability | null>(null);
+
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
   const [isSensorDialogOpen, setIsSensorDialogOpen] = useState(false);
 
@@ -39,15 +40,24 @@ export function MachineCard({ machine, onStatusChanged }: MachineCardProps) {
         });
 
         const response = await fetch(
-          `         ${API_BASE_URL}/machines/${machine.id}/availability?${query.toString()}`,
+          `${API_BASE_URL}/machines/${machine.id}/availability?${query.toString()}`,
         );
 
         if (!response.ok) {
           throw new Error("Availability could not be loaded");
         }
 
-        const data = (await response.json()) as MachineAvailability;
-        setAvailability(data.availability);
+        const responseData = (await response.json()) as
+          | MachineAvailability
+          | {
+              availability: MachineAvailability;
+            };
+
+        // Supports both flat and nested availability API responses
+        const availabilityData: MachineAvailability =
+          "runningDuration" in responseData ? responseData : responseData.availability;
+
+        setAvailability(availabilityData);
       } catch (error) {
         console.error("Failed to load availability:", error);
         setAvailability(null);
@@ -56,6 +66,19 @@ export function MachineCard({ machine, onStatusChanged }: MachineCardProps) {
 
     void loadAvailability();
   }, [machine.id, currentStatusId]);
+
+  // Converts milliseconds into a readable duration
+  const formatDuration = (milliseconds: number): string => {
+    if (milliseconds < 60_000) {
+      return `${Math.floor(milliseconds / 1_000)}s`;
+    }
+
+    const totalMinutes = Math.floor(milliseconds / 60_000);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+
+    return hours === 0 ? `${minutes}m` : `${hours}h ${minutes}m`;
+  };
 
   return (
     <>
@@ -80,8 +103,36 @@ export function MachineCard({ machine, onStatusChanged }: MachineCardProps) {
           </p>
 
           <p className="mt-2 text-2xl font-bold text-slate-900">
-            {availability === null ? "—" : `${availability.toFixed(1)}%`}
+            {availability === null ? "—" : `${availability.availability.toFixed(1)}%`}
           </p>
+
+          {availability && (
+            <div className="mt-4 grid grid-cols-3 gap-2 border-t border-slate-200 pt-3 text-center">
+              <div>
+                <p className="text-xs text-slate-500">Running</p>
+
+                <p className="mt-1 text-sm font-semibold text-green-700">
+                  {formatDuration(availability.runningDuration)}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs text-slate-500">Down</p>
+
+                <p className="mt-1 text-sm font-semibold text-red-700">
+                  {formatDuration(availability.downDuration)}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs text-slate-500">Tracked</p>
+
+                <p className="mt-1 text-sm font-semibold text-slate-700">
+                  {formatDuration(availability.totalTrackedDuration)}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         <p className="mt-4 text-sm text-slate-500">Machine ID: {machine.id}</p>

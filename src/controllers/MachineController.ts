@@ -118,7 +118,7 @@ export const changeMachineStatus = async (request: Request, response: Response):
   }
 };
 
-// Returns machine availability for a given time range
+// Returns machine availability details for a given time range
 export const getMachineAvailability = async (
   request: Request,
   response: Response,
@@ -142,13 +142,17 @@ export const getMachineAvailability = async (
       throw new AppError("The from and to values must be valid dates", 400);
     }
 
-    const availability = await machineStatusService.getAvailability(machineId, fromDate, toDate);
+    const availabilityDetails = await machineStatusService.getAvailability(
+      machineId,
+      fromDate,
+      toDate,
+    );
 
     response.status(200).json({
       machineId,
       from: fromDate.toISOString(),
       to: toDate.toISOString(),
-      availability,
+      ...availabilityDetails,
     });
   } catch (error) {
     handleError(error, response);

@@ -7,12 +7,20 @@ export interface AvailabilityEvent {
   endedAt: Date | null;
 }
 
-// Calculates machine availability for a given time range
-export const calculateAvailability = (
+// Defines the detailed availability result
+export interface AvailabilityDetails {
+  availability: number;
+  runningDuration: number;
+  downDuration: number;
+  totalTrackedDuration: number;
+}
+
+// Calculates detailed availability information for a given time range
+export const calculateAvailabilityDetails = (
   events: AvailabilityEvent[],
   from: Date,
   to: Date,
-): number => {
+): AvailabilityDetails => {
   if (from.getTime() >= to.getTime()) {
     throw new Error("The from date must be earlier than the to date");
   }
@@ -28,6 +36,7 @@ export const calculateAvailability = (
     }
 
     const overlapStart = Math.max(event.startedAt.getTime(), from.getTime());
+
     const overlapEnd = Math.min(eventEnd.getTime(), to.getTime());
 
     if (overlapStart >= overlapEnd) {
@@ -45,9 +54,22 @@ export const calculateAvailability = (
 
   const totalTrackedDuration = runningDuration + downDuration;
 
-  if (totalTrackedDuration === 0) {
-    return 0;
-  }
+  const availability =
+    totalTrackedDuration === 0 ? 0 : (runningDuration / totalTrackedDuration) * 100;
 
-  return (runningDuration / totalTrackedDuration) * 100;
+  return {
+    availability,
+    runningDuration,
+    downDuration,
+    totalTrackedDuration,
+  };
+};
+
+// Keeps the existing percentage-only function for existing tests
+export const calculateAvailability = (
+  events: AvailabilityEvent[],
+  from: Date,
+  to: Date,
+): number => {
+  return calculateAvailabilityDetails(events, from, to).availability;
 };

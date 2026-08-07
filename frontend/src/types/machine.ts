@@ -22,4 +22,7 @@ export interface MachineAvailability {
   from: string;
   to: string;
   availability: number;
+  runningDuration: number;
+  downDuration: number;
+  totalTrackedDuration: number;
 }
