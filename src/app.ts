@@ -3,6 +3,7 @@ import cors from "cors";
 import express from "express";
 import { AppDataSource } from "./database/data-source";
 import { machineRouter } from "./routes/machineRoutes";
+import { simulationRouter } from "./routes/simulationRoutes";
 
 // Create an Express application
 const app = express();
@@ -20,6 +21,7 @@ app.use(express.json());
 // Register machine routes
 app.use("/machines", machineRouter);
 
+app.use("/simulation", simulationRouter);
 // Define the port where the server will run
 const PORT = 3000;
 
