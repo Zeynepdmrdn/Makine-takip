@@ -8,7 +8,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { API_BASE_URL } from "../config/api";
+import { apiFetch } from "../config/api";
 import type { Machine } from "../types/machine";
 import type { SensorReading } from "../types/sensor";
 
@@ -34,27 +34,19 @@ interface ChartPoint {
   recordedAt: string;
 }
 
-function SensorChart({
-  title,
-  unit,
-  dataKey,
-  color,
-  data,
-}: SensorChartProps) {
+function SensorChart({ title, unit, dataKey, color, data }: SensorChartProps) {
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5">
+    <section className="rounded-2xl bg-white p-5 shadow-sm">
       <div className="mb-4">
-        <h3 className="font-semibold text-slate-900">{title}</h3>
+        <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
+
         <p className="text-sm text-slate-500">Unit: {unit}</p>
       </div>
 
       <div className="h-64 w-full">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data}>
-            <CartesianGrid
-              strokeDasharray="3 3"
-              stroke="#e2e8f0"
-            />
+            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
 
             <XAxis
               dataKey="time"
@@ -63,10 +55,7 @@ function SensorChart({
               interval="preserveStartEnd"
             />
 
-            <YAxis
-              tick={{ fontSize: 12 }}
-              stroke="#64748b"
-            />
+            <YAxis tick={{ fontSize: 12 }} stroke="#64748b" />
 
             <Tooltip />
 
@@ -87,33 +76,25 @@ function SensorChart({
   );
 }
 
-export function SensorDialog({
-  machine,
-  onClose,
-}: SensorDialogProps) {
+export function SensorDialog({ machine, onClose }: SensorDialogProps) {
   const [readings, setReadings] = useState<SensorReading[]>([]);
+
   const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(
-    null,
-  );
+
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let isCancelled = false;
 
     const loadReadings = async (): Promise<void> => {
       try {
-        const response = await fetch(
-          `${API_BASE_URL}/machines/${machine.id}/readings`,
-        );
+        const response = await apiFetch(`/machines/${machine.id}/readings`);
 
         if (!response.ok) {
-          throw new Error(
-            "Sensor readings could not be loaded.",
-          );
+          throw new Error("Sensor readings could not be loaded.");
         }
 
-        const data =
-          (await response.json()) as SensorReading[];
+        const data = (await response.json()) as SensorReading[];
 
         if (!isCancelled) {
           setReadings(data);
@@ -121,14 +102,9 @@ export function SensorDialog({
         }
       } catch (error) {
         if (!isCancelled) {
-          console.error(
-            "Failed to load sensor readings:",
-            error,
-          );
+          console.error("Failed to load sensor readings:", error);
 
-          setErrorMessage(
-            "Sensor readings could not be loaded.",
-          );
+          setErrorMessage("Sensor readings could not be loaded.");
         }
       } finally {
         if (!isCancelled) {
@@ -155,8 +131,7 @@ export function SensorDialog({
     return [...readings]
       .sort(
         (first, second) =>
-          new Date(first.recordedAt).getTime() -
-          new Date(second.recordedAt).getTime(),
+          new Date(first.recordedAt).getTime() - new Date(second.recordedAt).getTime(),
       )
       .slice(-30)
       .map((reading) => ({
@@ -165,14 +140,11 @@ export function SensorDialog({
         pressure: reading.pressure,
         speed: reading.speed,
         recordedAt: reading.recordedAt,
-        time: new Date(reading.recordedAt).toLocaleTimeString(
-          "tr-TR",
-          {
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-          },
-        ),
+        time: new Date(reading.recordedAt).toLocaleTimeString("tr-TR", {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        }),
       }));
   }, [readings]);
 
@@ -211,11 +183,9 @@ export function SensorDialog({
         </div>
 
         <div className="mt-6 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
-          During demo mode, sensor readings are generated
-          automatically every 5 seconds. The values depend on
-          the machine&apos;s current status and are stored in
-          SQLite. The charts show the latest 30 readings and
-          refresh automatically.
+          During demo mode, sensor readings are generated automatically every 5 seconds. The values
+          depend on the machine&apos;s current status and are stored in SQLite. The charts show the
+          latest 30 readings and refresh automatically.
         </div>
 
         {latestReading && (
@@ -253,54 +223,46 @@ export function SensorDialog({
         )}
 
         {isLoading && (
-          <p className="mt-6 rounded-xl bg-white p-5 text-slate-600">
-            Loading sensor readings...
-          </p>
+          <p className="mt-6 rounded-xl bg-white p-5 text-slate-600">Loading sensor readings...</p>
         )}
 
         {errorMessage && (
-          <p className="mt-6 rounded-xl bg-red-50 p-5 text-red-700">
-            {errorMessage}
+          <p className="mt-6 rounded-xl bg-red-50 p-5 text-red-700">{errorMessage}</p>
+        )}
+
+        {!isLoading && !errorMessage && chartData.length === 0 && (
+          <p className="mt-6 rounded-xl bg-white p-5 text-slate-600">
+            No sensor readings found for this machine.
           </p>
         )}
 
-        {!isLoading &&
-          !errorMessage &&
-          chartData.length === 0 && (
-            <p className="mt-6 rounded-xl bg-white p-5 text-slate-600">
-              No sensor readings found for this machine.
-            </p>
-          )}
+        {!isLoading && !errorMessage && chartData.length > 0 && (
+          <div className="mt-6 grid gap-5">
+            <SensorChart
+              title="Temperature"
+              unit="°C"
+              dataKey="temperature"
+              color="#ef4444"
+              data={chartData}
+            />
 
-        {!isLoading &&
-          !errorMessage &&
-          chartData.length > 0 && (
-            <div className="mt-6 grid gap-5">
-              <SensorChart
-                title="Temperature"
-                unit="°C"
-                dataKey="temperature"
-                color="#ef4444"
-                data={chartData}
-              />
+            <SensorChart
+              title="Pressure"
+              unit="bar"
+              dataKey="pressure"
+              color="#3b82f6"
+              data={chartData}
+            />
 
-              <SensorChart
-                title="Pressure"
-                unit="bar"
-                dataKey="pressure"
-                color="#3b82f6"
-                data={chartData}
-              />
-
-              <SensorChart
-                title="Speed"
-                unit="rpm"
-                dataKey="speed"
-                color="#16a34a"
-                data={chartData}
-              />
-            </div>
-          )}
+            <SensorChart
+              title="Speed"
+              unit="rpm"
+              dataKey="speed"
+              color="#16a34a"
+              data={chartData}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

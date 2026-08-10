@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { API_BASE_URL } from "../config/api";
+import { apiFetch } from "../config/api";
 import type { Machine, MachineStatusType } from "../types/machine";
 
 interface StatusDialogProps {
@@ -14,8 +14,11 @@ interface ErrorResponse {
 
 export function StatusDialog({ machine, onClose, onStatusChanged }: StatusDialogProps) {
   const [selectedStatus, setSelectedStatus] = useState<MachineStatusType | "">("");
+
   const [reason, setReason] = useState("");
+
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
@@ -24,18 +27,20 @@ export function StatusDialog({ machine, onClose, onStatusChanged }: StatusDialog
 
     if (selectedStatus === "") {
       setErrorMessage("Please select a machine status.");
+
       return;
     }
 
     if (selectedStatus === "DOWN" && reason.trim() === "") {
       setErrorMessage("A reason is required when the machine is DOWN.");
+
       return;
     }
 
     try {
       setIsSubmitting(true);
 
-      const response = await fetch(`${API_BASE_URL}/machines/${machine.id}/status`, {
+      const response = await apiFetch(`/machines/${machine.id}/status`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -86,17 +91,18 @@ export function StatusDialog({ machine, onClose, onStatusChanged }: StatusDialog
             </h2>
 
             <p className="mt-1 text-sm text-slate-500">
-              {machine.name} - {machine.code}
+              {machine.name} · {machine.code}
             </p>
           </div>
 
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg px-3 py-1 text-slate-500 hover:bg-slate-100"
+            disabled={isSubmitting}
+            className="rounded-lg px-3 py-1 text-xl text-slate-500 hover:bg-slate-100 disabled:opacity-60"
             aria-label="Close status dialog"
           >
-            X
+            ×
           </button>
         </div>
 
@@ -114,18 +120,25 @@ export function StatusDialog({ machine, onClose, onStatusChanged }: StatusDialog
               value={selectedStatus}
               onChange={(event) => {
                 const status = event.target.value as MachineStatusType | "";
+
                 setSelectedStatus(status);
+                setErrorMessage(null);
 
                 if (status !== "DOWN") {
                   setReason("");
                 }
               }}
-              className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
+              disabled={isSubmitting}
+              className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 disabled:opacity-60"
             >
               <option value="">Select a status</option>
+
               <option value="RUNNING">RUNNING</option>
+
               <option value="DOWN">DOWN</option>
+
               <option value="SETUP">SETUP</option>
+
               <option value="IDLE">IDLE</option>
             </select>
           </div>
@@ -144,7 +157,8 @@ export function StatusDialog({ machine, onClose, onStatusChanged }: StatusDialog
                 value={reason}
                 onChange={(event) => setReason(event.target.value)}
                 rows={3}
-                className="mt-2 w-full resize-none rounded-xl border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
+                disabled={isSubmitting}
+                className="mt-2 w-full resize-none rounded-xl border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 disabled:opacity-60"
                 placeholder="Describe why the machine is down"
               />
             </div>
@@ -167,7 +181,7 @@ export function StatusDialog({ machine, onClose, onStatusChanged }: StatusDialog
             <button
               type="submit"
               disabled={isSubmitting}
-              className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isSubmitting ? "Saving..." : "Save status"}
             </button>

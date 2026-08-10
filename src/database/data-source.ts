@@ -3,6 +3,7 @@ import { DataSource } from "typeorm";
 import { Machine } from "../entities/Machine";
 import { MachineStatus } from "../entities/MachineStatus";
 import { SensorReading } from "../entities/SensorReading";
+import { User } from "../entities/User";
 
 // Configures the application's database connection
 export const AppDataSource = new DataSource({
@@ -10,5 +11,5 @@ export const AppDataSource = new DataSource({
   database: "database.sqlite",
   synchronize: true,
   logging: false,
-  entities: [Machine, MachineStatus, SensorReading],
+  entities: [Machine, MachineStatus, SensorReading, User],
 });

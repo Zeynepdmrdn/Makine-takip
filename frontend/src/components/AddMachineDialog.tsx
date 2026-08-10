@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { API_BASE_URL } from "../config/api";
+import { apiFetch } from "../config/api";
 
 interface AddMachineDialogProps {
   onClose: () => void;
@@ -13,7 +13,9 @@ interface ErrorResponse {
 export function AddMachineDialog({ onClose, onMachineCreated }: AddMachineDialogProps) {
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
+
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
@@ -25,13 +27,14 @@ export function AddMachineDialog({ onClose, onMachineCreated }: AddMachineDialog
 
     if (normalizedName === "" || normalizedCode === "") {
       setErrorMessage("Machine name and code are required.");
+
       return;
     }
 
     try {
       setIsSubmitting(true);
 
-      const response = await fetch(`${API_BASE_URL}/machines`, {
+      const response = await apiFetch("/machines", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -81,7 +84,8 @@ export function AddMachineDialog({ onClose, onMachineCreated }: AddMachineDialog
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg px-3 py-1 text-slate-500 hover:bg-slate-100"
+            disabled={isSubmitting}
+            className="rounded-lg px-3 py-1 text-slate-500 hover:bg-slate-100 disabled:opacity-60"
             aria-label="Close add machine dialog"
           >
             ×
@@ -99,7 +103,7 @@ export function AddMachineDialog({ onClose, onMachineCreated }: AddMachineDialog
               type="text"
               value={name}
               onChange={(event) => setName(event.target.value)}
-              className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
+              className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
               placeholder="Example: Cutting Machine"
               disabled={isSubmitting}
             />
@@ -115,7 +119,7 @@ export function AddMachineDialog({ onClose, onMachineCreated }: AddMachineDialog
               type="text"
               value={code}
               onChange={(event) => setCode(event.target.value)}
-              className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-blue-500"
+              className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2 text-slate-900 uppercase outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
               placeholder="Example: MC-004"
               disabled={isSubmitting}
             />
@@ -138,7 +142,7 @@ export function AddMachineDialog({ onClose, onMachineCreated }: AddMachineDialog
             <button
               type="submit"
               disabled={isSubmitting}
-              className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isSubmitting ? "Creating..." : "Create machine"}
             </button>
