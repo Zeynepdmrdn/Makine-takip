@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../config/api";
 
+interface SimulationControlsProps {
+  canManage: boolean;
+}
+
 interface SimulationResponse {
   isRunning: boolean;
   message?: string;
@@ -8,9 +12,8 @@ interface SimulationResponse {
 
 const SIMULATION_STARTED_AT_KEY = "simulationStartedAt";
 
-export function SimulationControls() {
+export function SimulationControls({ canManage }: SimulationControlsProps) {
   const [isRunning, setIsRunning] = useState(false);
-
   const [isLoading, setIsLoading] = useState(true);
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -140,11 +143,8 @@ export function SimulationControls() {
     const totalSeconds = Math.max(0, Math.floor((currentTimestamp - startedAtTimestamp) / 1_000));
 
     const days = Math.floor(totalSeconds / 86_400);
-
     const hours = Math.floor((totalSeconds % 86_400) / 3_600);
-
     const minutes = Math.floor((totalSeconds % 3_600) / 60);
-
     const seconds = totalSeconds % 60;
 
     if (days > 0) {
@@ -195,16 +195,22 @@ export function SimulationControls() {
           )}
         </div>
 
-        <button
-          type="button"
-          disabled={isLoading}
-          onClick={() => void changeSimulationState(isRunning ? "stop" : "start")}
-          className={`rounded-xl px-5 py-3 text-sm font-semibold text-white shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60 ${
-            isRunning ? "bg-red-600 hover:bg-red-700" : "bg-green-600 hover:bg-green-700"
-          }`}
-        >
-          {isLoading ? "Please wait..." : isRunning ? "Stop Demo" : "Start Demo"}
-        </button>
+        {canManage ? (
+          <button
+            type="button"
+            disabled={isLoading}
+            onClick={() => void changeSimulationState(isRunning ? "stop" : "start")}
+            className={`rounded-xl px-5 py-3 text-sm font-semibold text-white shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60 ${
+              isRunning ? "bg-red-600 hover:bg-red-700" : "bg-green-600 hover:bg-green-700"
+            }`}
+          >
+            {isLoading ? "Please wait..." : isRunning ? "Stop Demo" : "Start Demo"}
+          </button>
+        ) : (
+          <span className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-500">
+            Admin controlled
+          </span>
+        )}
       </div>
 
       {errorMessage && (

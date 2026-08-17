@@ -7,26 +7,36 @@ import {
   getMachineById,
 } from "../controllers/MachineController";
 import { createSensorReading, getSensorReadings } from "../controllers/SensorReadingController";
+import { UserRole } from "../entities/User";
+import { requireRole } from "../middleware/requireRole";
 
 export const machineRouter = Router();
 
-// Creates a new machine
-machineRouter.post("/", createMachine);
+// Only admins can create a machine
+machineRouter.post("/", requireRole(UserRole.ADMIN), createMachine);
 
-// Returns all machines
+// All authenticated users can view machines
 machineRouter.get("/", getAllMachines);
 
-// Creates a sensor reading for a machine
-machineRouter.post("/:id/readings", createSensorReading);
+// Admins and operators can create a sensor reading
+machineRouter.post(
+  "/:id/readings",
+  requireRole(UserRole.ADMIN, UserRole.OPERATOR),
+  createSensorReading,
+);
 
-// Returns sensor readings of a machine
+// All authenticated users can view sensor readings
 machineRouter.get("/:id/readings", getSensorReadings);
 
-// Changes the status of a machine
-machineRouter.post("/:id/status", changeMachineStatus);
+// Admins and operators can change machine status
+machineRouter.post(
+  "/:id/status",
+  requireRole(UserRole.ADMIN, UserRole.OPERATOR),
+  changeMachineStatus,
+);
 
-// Returns machine availability for a time range
+// All authenticated users can view availability
 machineRouter.get("/:id/availability", getMachineAvailability);
 
-// Returns one machine by ID
+// All authenticated users can view one machine
 machineRouter.get("/:id", getMachineById);

@@ -2,10 +2,13 @@ import "reflect-metadata";
 import cors from "cors";
 import express from "express";
 import { AppDataSource } from "./database/data-source";
+import { UserRole } from "./entities/User";
 import { requireAuth } from "./middleware/requireAuth";
+import { requireRole } from "./middleware/requireRole";
 import { authRouter } from "./routes/authRoutes";
 import { machineRouter } from "./routes/machineRoutes";
 import { simulationRouter } from "./routes/simulationRoutes";
+import { userRouter } from "./routes/userRoutes";
 
 // Create an Express application
 const app = express();
@@ -27,6 +30,9 @@ app.use("/auth", authRouter);
 app.use("/machines", requireAuth, machineRouter);
 
 app.use("/simulation", requireAuth, simulationRouter);
+
+// Only administrators can list users and change roles
+app.use("/users", requireAuth, requireRole(UserRole.ADMIN), userRouter);
 
 // Define the port where the server will run
 const PORT = 3000;

@@ -1,4 +1,6 @@
 import { Router } from "express";
+import { UserRole } from "../entities/User";
+import { requireRole } from "../middleware/requireRole";
 import {
   getSimulationStatus,
   startSimulation,
@@ -7,11 +9,11 @@ import {
 
 export const simulationRouter = Router();
 
-// Returns whether the simulation is running
+// All authenticated users can view simulation status
 simulationRouter.get("/status", getSimulationStatus);
 
-// Starts automatic status and sensor generation
-simulationRouter.post("/start", startSimulation);
+// Only admins can start automatic production simulation
+simulationRouter.post("/start", requireRole(UserRole.ADMIN), startSimulation);
 
-// Stops automatic status and sensor generation
-simulationRouter.post("/stop", stopSimulation);
+// Only admins can stop automatic production simulation
+simulationRouter.post("/stop", requireRole(UserRole.ADMIN), stopSimulation);

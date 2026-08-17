@@ -7,6 +7,7 @@ import { StatusHistoryDialog } from "./StatusHistoryDialog";
 
 interface MachineCardProps {
   machine: Machine;
+  canChangeStatus: boolean;
   onStatusChanged: () => Promise<void>;
 }
 
@@ -36,7 +37,7 @@ const cardAccentStyles: Record<MachineStatusType | "UNKNOWN", string> = {
   UNKNOWN: "from-slate-300 to-slate-500",
 };
 
-export function MachineCard({ machine, onStatusChanged }: MachineCardProps) {
+export function MachineCard({ machine, canChangeStatus, onStatusChanged }: MachineCardProps) {
   const [availability, setAvailability] = useState<MachineAvailability | null>(null);
 
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
@@ -286,17 +287,19 @@ export function MachineCard({ machine, onStatusChanged }: MachineCardProps) {
             Status Timeline
           </button>
 
-          <button
-            type="button"
-            onClick={() => setIsStatusDialogOpen(true)}
-            className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 hover:shadow-md"
-          >
-            Change Status
-          </button>
+          {canChangeStatus && (
+            <button
+              type="button"
+              onClick={() => setIsStatusDialogOpen(true)}
+              className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 hover:shadow-md"
+            >
+              Change Status
+            </button>
+          )}
         </div>
       </article>
 
-      {isStatusDialogOpen && (
+      {canChangeStatus && isStatusDialogOpen && (
         <StatusDialog
           machine={machine}
           onClose={() => setIsStatusDialogOpen(false)}

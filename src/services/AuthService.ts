@@ -2,7 +2,7 @@ import { compare, hash } from "bcryptjs";
 import { sign } from "jsonwebtoken";
 import { JWT_EXPIRES_IN, JWT_SECRET } from "../config/auth";
 import { AppDataSource } from "../database/data-source";
-import { User } from "../entities/User";
+import { User, UserRole } from "../entities/User";
 import { AppError } from "../errors/AppError";
 
 export interface RegisterInput {
@@ -20,6 +20,7 @@ export interface AuthenticatedUser {
   id: number;
   name: string;
   email: string;
+  role: UserRole;
   createdAt: Date;
 }
 
@@ -29,7 +30,7 @@ export interface AuthenticationResult {
 }
 
 export class AuthService {
-  // Registers a new user and returns an authentication token
+  // Registers a new operator and returns an authentication token
   async register(input: RegisterInput): Promise<AuthenticationResult> {
     const userRepository = AppDataSource.getRepository(User);
 
@@ -62,6 +63,7 @@ export class AuthService {
       name: normalizedName,
       email: normalizedEmail,
       passwordHash,
+      role: UserRole.VIEWER,
     });
 
     const savedUser = await userRepository.save(user);
@@ -97,6 +99,7 @@ export class AuthService {
     const token = sign(
       {
         email: user.email,
+        role: user.role,
       },
       JWT_SECRET,
       {
@@ -110,6 +113,7 @@ export class AuthService {
         id: user.id,
         name: user.name,
         email: user.email,
+        role: user.role,
         createdAt: user.createdAt,
       },
       token,

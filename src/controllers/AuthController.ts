@@ -77,3 +77,8 @@ export const login = async (request: Request, response: Response): Promise<void>
     handleError(error, response);
   }
 };
+
+// Returns the authenticated user's latest database information
+export const getCurrentUser = (_request: Request, response: Response): void => {
+  response.status(200).json(response.locals.authUser);
+};

@@ -1,13 +1,19 @@
 import { NextFunction, Request, Response } from "express";
 import { JwtPayload, verify } from "jsonwebtoken";
 import { JWT_SECRET } from "../config/auth";
+import { AppDataSource } from "../database/data-source";
+import { User } from "../entities/User";
 
 interface AuthenticationPayload extends JwtPayload {
   email?: string;
 }
 
-// Verifies the JWT sent with a protected API request
-export const requireAuth = (request: Request, response: Response, next: NextFunction): void => {
+// Verifies the JWT and loads the user's current database role
+export const requireAuth = async (
+  request: Request,
+  response: Response,
+  next: NextFunction,
+): Promise<void> => {
   const authorizationHeader = request.headers.authorization;
 
   if (!authorizationHeader || !authorizationHeader.startsWith("Bearer ")) {
@@ -28,28 +34,50 @@ export const requireAuth = (request: Request, response: Response, next: NextFunc
     return;
   }
 
+  let decodedToken: AuthenticationPayload;
+
   try {
-    const decodedToken = verify(token, JWT_SECRET) as AuthenticationPayload;
-
-    const userId = Number(decodedToken.sub);
-
-    if (!Number.isInteger(userId) || userId <= 0) {
-      response.status(401).json({
-        message: "Authentication token is invalid",
-      });
-
-      return;
-    }
-
-    response.locals.authUser = {
-      id: userId,
-      email: typeof decodedToken.email === "string" ? decodedToken.email : "",
-    };
-
-    next();
+    decodedToken = verify(token, JWT_SECRET) as AuthenticationPayload;
   } catch {
     response.status(401).json({
       message: "Authentication token is invalid or expired",
     });
+
+    return;
   }
+
+  const userId = Number(decodedToken.sub);
+
+  if (!Number.isInteger(userId) || userId <= 0) {
+    response.status(401).json({
+      message: "Authentication token is invalid",
+    });
+
+    return;
+  }
+
+  const userRepository = AppDataSource.getRepository(User);
+
+  const user = await userRepository.findOneBy({
+    id: userId,
+  });
+
+  if (!user) {
+    response.status(401).json({
+      message: "Authenticated user could not be found",
+    });
+
+    return;
+  }
+
+  // Uses the current database role instead of a possibly outdated JWT role
+  response.locals.authUser = {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    createdAt: user.createdAt,
+  };
+
+  next();
 };

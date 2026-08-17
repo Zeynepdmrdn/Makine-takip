@@ -3,8 +3,9 @@ import { AddMachineDialog } from "./components/AddMachineDialog";
 import { AuthPage } from "./components/AuthPage";
 import { MachineCard } from "./components/MachineCard";
 import { SimulationControls } from "./components/SimulationControls";
+import { UserManagementDialog } from "./components/UserManagementDialog";
 import { apiFetch } from "./config/api";
-import { clearAuthentication, getStoredUser } from "./config/auth";
+import { clearAuthentication, getStoredUser, saveAuthenticatedUser } from "./config/auth";
 import type { AuthenticatedUser } from "./types/auth";
 import type { Machine } from "./types/machine";
 
@@ -31,6 +32,10 @@ function App() {
 
   const [isAddMachineDialogOpen, setIsAddMachineDialogOpen] = useState(false);
 
+  const [isUserManagementDialogOpen, setIsUserManagementDialogOpen] = useState(false);
+
+  const authenticatedUserId = authenticatedUser?.id;
+
   const loadMachines = useCallback(async (): Promise<void> => {
     try {
       const data = await fetchMachines();
@@ -46,7 +51,7 @@ function App() {
 
   // Loads machines when an authenticated user opens the dashboard
   useEffect(() => {
-    if (!authenticatedUser) {
+    if (!authenticatedUserId) {
       return;
     }
 
@@ -75,11 +80,52 @@ function App() {
     return () => {
       isCancelled = true;
     };
-  }, [authenticatedUser]);
+  }, [authenticatedUserId]);
+
+  // Refreshes the authenticated user's current database role
+  useEffect(() => {
+    if (!authenticatedUserId) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    const refreshAuthenticatedUser = async (): Promise<void> => {
+      try {
+        const response = await apiFetch("/auth/me");
+
+        if (!response.ok) {
+          throw new Error("Current user could not be refreshed.");
+        }
+
+        const currentUser = (await response.json()) as AuthenticatedUser;
+
+        if (!isCancelled) {
+          setAuthenticatedUser(currentUser);
+          saveAuthenticatedUser(currentUser);
+        }
+      } catch (error) {
+        if (!isCancelled) {
+          console.error("Failed to refresh current user:", error);
+        }
+      }
+    };
+
+    void refreshAuthenticatedUser();
+
+    const userRefreshTimer = window.setInterval(() => {
+      void refreshAuthenticatedUser();
+    }, 5_000);
+
+    return () => {
+      isCancelled = true;
+      window.clearInterval(userRefreshTimer);
+    };
+  }, [authenticatedUserId]);
 
   // Refreshes cards so automatic status changes become visible
   useEffect(() => {
-    if (!authenticatedUser) {
+    if (!authenticatedUserId) {
       return;
     }
 
@@ -90,7 +136,7 @@ function App() {
     return () => {
       window.clearInterval(refreshTimer);
     };
-  }, [authenticatedUser, loadMachines]);
+  }, [authenticatedUserId, loadMachines]);
 
   const handleAuthenticated = (user: AuthenticatedUser): void => {
     setAuthenticatedUser(user);
@@ -104,7 +150,13 @@ function App() {
     setMachines([]);
     setErrorMessage(null);
     setIsAddMachineDialogOpen(false);
+    setIsUserManagementDialogOpen(false);
   };
+
+  const isAdmin = authenticatedUser?.role === "ADMIN";
+
+  const canChangeMachineStatus =
+    authenticatedUser?.role === "ADMIN" || authenticatedUser?.role === "OPERATOR";
 
   if (!authenticatedUser) {
     return <AuthPage onAuthenticated={handleAuthenticated} />;
@@ -130,15 +182,29 @@ function App() {
                 <p className="text-sm font-semibold text-slate-800">{authenticatedUser.name}</p>
 
                 <p className="text-xs text-slate-500">{authenticatedUser.email}</p>
+
+                <p className="mt-1 text-xs font-semibold text-blue-600">{authenticatedUser.role}</p>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setIsAddMachineDialogOpen(true)}
-                className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
-              >
-                + Add Machine
-              </button>
+              {isAdmin && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setIsUserManagementDialogOpen(true)}
+                    className="rounded-xl border border-violet-300 bg-violet-50 px-5 py-3 text-sm font-semibold text-violet-700 transition hover:bg-violet-100"
+                  >
+                    Manage Users
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsAddMachineDialogOpen(true)}
+                    className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+                  >
+                    + Add Machine
+                  </button>
+                </>
+              )}
 
               <button
                 type="button"
@@ -151,7 +217,7 @@ function App() {
           </div>
         </header>
 
-        <SimulationControls />
+        <SimulationControls canManage={isAdmin} />
 
         {isLoading && (
           <p className="rounded-xl bg-white p-6 text-slate-600 shadow-sm">Loading machines...</p>
@@ -166,16 +232,28 @@ function App() {
         {!isLoading && !errorMessage && machines.length > 0 && (
           <section className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {machines.map((machine) => (
-              <MachineCard key={machine.id} machine={machine} onStatusChanged={loadMachines} />
+              <MachineCard
+                key={machine.id}
+                machine={machine}
+                canChangeStatus={canChangeMachineStatus}
+                onStatusChanged={loadMachines}
+              />
             ))}
           </section>
         )}
       </div>
 
-      {isAddMachineDialogOpen && (
+      {isAdmin && isAddMachineDialogOpen && (
         <AddMachineDialog
           onClose={() => setIsAddMachineDialogOpen(false)}
           onMachineCreated={loadMachines}
+        />
+      )}
+
+      {isAdmin && isUserManagementDialogOpen && (
+        <UserManagementDialog
+          currentUserId={authenticatedUser.id}
+          onClose={() => setIsUserManagementDialogOpen(false)}
         />
       )}
     </main>

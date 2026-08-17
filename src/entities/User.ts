@@ -1,5 +1,11 @@
 import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from "typeorm";
 
+export enum UserRole {
+  ADMIN = "ADMIN",
+  OPERATOR = "OPERATOR",
+  VIEWER = "VIEWER",
+}
+
 // Represents a registered application user
 @Entity()
 export class User {
@@ -22,6 +28,12 @@ export class User {
     type: "text",
   })
   passwordHash!: string;
+
+  @Column({
+    type: "text",
+    default: UserRole.VIEWER,
+  })
+  role!: UserRole;
 
   @CreateDateColumn({
     type: "datetime",

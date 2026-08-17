@@ -12,6 +12,10 @@ export const getAuthToken = (): string | null => {
   return window.localStorage.getItem(AUTH_TOKEN_KEY);
 };
 
+export const saveAuthenticatedUser = (user: AuthenticatedUser): void => {
+  window.localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+};
+
 export const getStoredUser = (): AuthenticatedUser | null => {
   const storedUser = window.localStorage.getItem(AUTH_USER_KEY);
 
