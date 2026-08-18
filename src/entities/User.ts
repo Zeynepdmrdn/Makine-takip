@@ -1,4 +1,12 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from "typeorm";
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  JoinTable,
+  ManyToMany,
+  PrimaryGeneratedColumn,
+} from "typeorm";
+import { Machine } from "./Machine";
 
 export enum UserRole {
   ADMIN = "ADMIN",
@@ -39,4 +47,19 @@ export class User {
     type: "datetime",
   })
   createdAt!: Date;
+
+  // Machines assigned to this operator
+  @ManyToMany(() => Machine, (machine) => machine.operators)
+  @JoinTable({
+    name: "user_machine",
+    joinColumn: {
+      name: "userId",
+      referencedColumnName: "id",
+    },
+    inverseJoinColumn: {
+      name: "machineId",
+      referencedColumnName: "id",
+    },
+  })
+  assignedMachines!: Machine[];
 }

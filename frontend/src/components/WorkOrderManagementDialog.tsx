@@ -7,6 +7,7 @@ import type { WorkOrder, WorkOrderStatus } from "../types/workOrder";
 import { ProductionHistoryDialog } from "./ProductionHistoryDialog";
 
 interface WorkOrderManagementDialogProps {
+  currentUserId: number;
   currentUserRole: UserRole;
   onClose: () => void;
 }
@@ -23,6 +24,7 @@ const statusStyles: Record<WorkOrderStatus, string> = {
 };
 
 export function WorkOrderManagementDialog({
+  currentUserId,
   currentUserRole,
   onClose,
 }: WorkOrderManagementDialogProps) {
@@ -31,6 +33,7 @@ export function WorkOrderManagementDialog({
   const [selectedWorkOrder, setSelectedWorkOrder] = useState<WorkOrder | null>(null);
 
   const [products, setProducts] = useState<Product[]>([]);
+
   const [machines, setMachines] = useState<Machine[]>([]);
 
   const [code, setCode] = useState("");
@@ -39,6 +42,7 @@ export function WorkOrderManagementDialog({
   const [targetQuantity, setTargetQuantity] = useState("");
 
   const [isLoading, setIsLoading] = useState(true);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [updatingWorkOrderId, setUpdatingWorkOrderId] = useState<number | null>(null);
@@ -46,8 +50,6 @@ export function WorkOrderManagementDialog({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const isAdmin = currentUserRole === "ADMIN";
-
-  const canOperate = currentUserRole === "ADMIN" || currentUserRole === "OPERATOR";
 
   useEffect(() => {
     let isCancelled = false;
@@ -92,7 +94,6 @@ export function WorkOrderManagementDialog({
 
     void loadData();
 
-    // Refreshes production progress while the dialog is open
     const refreshTimer = window.setInterval(() => {
       void loadData();
     }, 5_000);
@@ -113,16 +114,19 @@ export function WorkOrderManagementDialog({
 
     if (code.trim() === "") {
       setErrorMessage("Work order code is required.");
+
       return;
     }
 
     if (!Number.isInteger(parsedProductId) || parsedProductId <= 0) {
       setErrorMessage("Please select a product.");
+
       return;
     }
 
     if (!Number.isInteger(parsedMachineId) || parsedMachineId <= 0) {
       setErrorMessage("Please select a machine.");
+
       return;
     }
 
@@ -384,6 +388,28 @@ export function WorkOrderManagementDialog({
               </p>
             </div>
 
+            {currentUserRole === "OPERATOR" && (
+              <div className="mt-5 rounded-2xl border border-blue-200 bg-blue-50 p-4">
+                <p className="text-sm font-semibold text-blue-800">Operator permissions</p>
+
+                <p className="mt-1 text-sm text-blue-700">
+                  You can view every work order, but you can only start and complete work orders
+                  belonging to machines assigned to you.
+                </p>
+              </div>
+            )}
+
+            {currentUserRole === "VIEWER" && (
+              <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm font-semibold text-slate-700">Read-only access</p>
+
+                <p className="mt-1 text-sm text-slate-600">
+                  You can inspect work orders and production analytics, but you cannot change
+                  production operations.
+                </p>
+              </div>
+            )}
+
             {isLoading && (
               <p className="mt-5 rounded-xl bg-slate-50 p-5 text-slate-600">
                 Loading work orders...
@@ -403,10 +429,25 @@ export function WorkOrderManagementDialog({
 
                   const targetReached = workOrder.actualQuantity >= workOrder.targetQuantity;
 
+                  const relatedMachine = machines.find(
+                    (machine) => machine.id === workOrder.machineId,
+                  );
+
+                  const isAssignedToCurrentUser =
+                    relatedMachine?.operators.some((operator) => operator.id === currentUserId) ??
+                    false;
+
+                  const canOperateWorkOrder =
+                    isAdmin || (currentUserRole === "OPERATOR" && isAssignedToCurrentUser);
+
                   return (
                     <article
                       key={workOrder.id}
-                      className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+                      className={`rounded-2xl border p-5 shadow-sm transition ${
+                        isAssignedToCurrentUser && currentUserRole === "OPERATOR"
+                          ? "border-blue-300 bg-gradient-to-br from-white to-blue-50 ring-1 ring-blue-200"
+                          : "border-slate-200 bg-white"
+                      }`}
                     >
                       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
                         <div>
@@ -420,6 +461,18 @@ export function WorkOrderManagementDialog({
                             >
                               {workOrder.status}
                             </span>
+
+                            {currentUserRole === "OPERATOR" && isAssignedToCurrentUser && (
+                              <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-blue-700">
+                                Assigned to you
+                              </span>
+                            )}
+
+                            {currentUserRole === "OPERATOR" && !isAssignedToCurrentUser && (
+                              <span className="rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-slate-500">
+                                View only
+                              </span>
+                            )}
                           </div>
 
                           <p className="mt-2 text-sm font-semibold text-slate-700">
@@ -429,6 +482,13 @@ export function WorkOrderManagementDialog({
                           <p className="mt-1 text-sm text-slate-500">
                             {workOrder.machine.code} - {workOrder.machine.name}
                           </p>
+
+                          {relatedMachine && relatedMachine.operators.length > 0 && (
+                            <p className="mt-2 text-xs text-slate-500">
+                              Assigned operators:{" "}
+                              {relatedMachine.operators.map((operator) => operator.name).join(", ")}
+                            </p>
+                          )}
                         </div>
 
                         <div className="flex flex-wrap gap-2">
@@ -440,12 +500,12 @@ export function WorkOrderManagementDialog({
                             Production Analytics
                           </button>
 
-                          {canOperate && workOrder.status === "PLANNED" && (
+                          {canOperateWorkOrder && workOrder.status === "PLANNED" && (
                             <button
                               type="button"
                               disabled={updatingWorkOrderId === workOrder.id}
                               onClick={() => void changeWorkOrderState(workOrder.id, "start")}
-                              className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
+                              className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                             >
                               {updatingWorkOrderId === workOrder.id
                                 ? "Starting..."
@@ -453,18 +513,20 @@ export function WorkOrderManagementDialog({
                             </button>
                           )}
 
-                          {canOperate && workOrder.status === "IN_PROGRESS" && targetReached && (
-                            <button
-                              type="button"
-                              disabled={updatingWorkOrderId === workOrder.id}
-                              onClick={() => void changeWorkOrderState(workOrder.id, "complete")}
-                              className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-green-700 disabled:opacity-60"
-                            >
-                              {updatingWorkOrderId === workOrder.id
-                                ? "Completing..."
-                                : "Complete Work Order"}
-                            </button>
-                          )}
+                          {canOperateWorkOrder &&
+                            workOrder.status === "IN_PROGRESS" &&
+                            targetReached && (
+                              <button
+                                type="button"
+                                disabled={updatingWorkOrderId === workOrder.id}
+                                onClick={() => void changeWorkOrderState(workOrder.id, "complete")}
+                                className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {updatingWorkOrderId === workOrder.id
+                                  ? "Completing..."
+                                  : "Complete Work Order"}
+                              </button>
+                            )}
                         </div>
                       </div>
 
@@ -493,11 +555,22 @@ export function WorkOrderManagementDialog({
                         </p>
                       </div>
 
-                      {workOrder.status === "IN_PROGRESS" && targetReached && (
-                        <p className="mt-4 rounded-xl border border-green-200 bg-green-50 p-3 text-sm font-semibold text-green-700">
-                          Target reached. This work order can now be completed.
-                        </p>
-                      )}
+                      {workOrder.status === "IN_PROGRESS" &&
+                        targetReached &&
+                        canOperateWorkOrder && (
+                          <p className="mt-4 rounded-xl border border-green-200 bg-green-50 p-3 text-sm font-semibold text-green-700">
+                            Target reached. This work order can now be completed.
+                          </p>
+                        )}
+
+                      {workOrder.status === "IN_PROGRESS" &&
+                        targetReached &&
+                        !canOperateWorkOrder && (
+                          <p className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+                            Target reached. An authorized operator or administrator can complete
+                            this work order.
+                          </p>
+                        )}
                     </article>
                   );
                 })}

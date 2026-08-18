@@ -9,12 +9,19 @@ export interface MachineStatus {
   endedAt: string | null;
 }
 
+export interface MachineOperator {
+  id: number;
+  name: string;
+  email: string;
+}
+
 export interface Machine {
   id: number;
   name: string;
   code: string;
   createdAt: string;
   statuses: MachineStatus[];
+  operators: MachineOperator[];
 }
 
 export interface MachineAvailability {

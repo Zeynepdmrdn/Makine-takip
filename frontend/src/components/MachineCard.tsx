@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import type { Machine, MachineAvailability, MachineStatusType } from "../types/machine";
 import { apiFetch } from "../config/api";
+import type { Machine, MachineAvailability, MachineStatusType } from "../types/machine";
 import { SensorDialog } from "./SensorDialog";
 import { StatusDialog } from "./StatusDialog";
 import { StatusHistoryDialog } from "./StatusHistoryDialog";
@@ -8,6 +8,7 @@ import { StatusHistoryDialog } from "./StatusHistoryDialog";
 interface MachineCardProps {
   machine: Machine;
   canChangeStatus: boolean;
+  isAssignedToCurrentUser?: boolean;
   onStatusChanged: () => Promise<void>;
 }
 
@@ -37,7 +38,12 @@ const cardAccentStyles: Record<MachineStatusType | "UNKNOWN", string> = {
   UNKNOWN: "from-slate-300 to-slate-500",
 };
 
-export function MachineCard({ machine, canChangeStatus, onStatusChanged }: MachineCardProps) {
+export function MachineCard({
+  machine,
+  canChangeStatus,
+  isAssignedToCurrentUser = false,
+  onStatusChanged,
+}: MachineCardProps) {
   const [availability, setAvailability] = useState<MachineAvailability | null>(null);
 
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
@@ -48,7 +54,6 @@ export function MachineCard({ machine, canChangeStatus, onStatusChanged }: Machi
 
   const [currentTimestamp, setCurrentTimestamp] = useState<number | null>(null);
 
-  // Sorts statuses from newest to oldest
   const sortedStatuses = [...machine.statuses].sort(
     (first, second) => new Date(second.startedAt).getTime() - new Date(first.startedAt).getTime(),
   );
@@ -65,6 +70,8 @@ export function MachineCard({ machine, canChangeStatus, onStatusChanged }: Machi
   const currentStatus = currentStatusRecord?.status ?? "UNKNOWN";
 
   const currentStatusId = currentStatusRecord?.id;
+
+  const assignedOperators = machine.operators ?? [];
 
   useEffect(() => {
     const loadAvailability = async (): Promise<void> => {
@@ -90,7 +97,6 @@ export function MachineCard({ machine, canChangeStatus, onStatusChanged }: Machi
               availability: MachineAvailability;
             };
 
-        // Supports flat and nested availability responses
         const availabilityData: MachineAvailability =
           "runningDuration" in responseData ? responseData : responseData.availability;
 
@@ -105,9 +111,8 @@ export function MachineCard({ machine, canChangeStatus, onStatusChanged }: Machi
     void loadAvailability();
   }, [machine.id, currentStatusId]);
 
-  // Updates the relative transition time every five seconds
   useEffect(() => {
-    const updateTimestamp = () => {
+    const updateTimestamp = (): void => {
       setCurrentTimestamp(new Date().getTime());
     };
 
@@ -120,7 +125,6 @@ export function MachineCard({ machine, canChangeStatus, onStatusChanged }: Machi
     };
   }, []);
 
-  // Converts milliseconds into a readable duration
   const formatDuration = (milliseconds: number): string => {
     if (!Number.isFinite(milliseconds) || milliseconds < 0) {
       return "—";
@@ -138,7 +142,6 @@ export function MachineCard({ machine, canChangeStatus, onStatusChanged }: Machi
     return hours === 0 ? `${minutes}m` : `${hours}h ${minutes}m`;
   };
 
-  // Shows how much time has passed since the last transition
   const formatTimeAgo = (dateValue: string): string => {
     if (currentTimestamp === null) {
       return "just now";
@@ -181,7 +184,9 @@ export function MachineCard({ machine, canChangeStatus, onStatusChanged }: Machi
   return (
     <>
       <article
-        className={`relative overflow-hidden rounded-2xl border p-6 shadow-lg transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${cardStatusStyles[currentStatus]}`}
+        className={`relative overflow-hidden rounded-2xl border p-6 shadow-lg transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${
+          cardStatusStyles[currentStatus]
+        } ${isAssignedToCurrentUser ? "ring-2 ring-blue-400 ring-offset-2" : ""}`}
       >
         <div
           className={`absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r ${cardAccentStyles[currentStatus]}`}
@@ -190,7 +195,21 @@ export function MachineCard({ machine, canChangeStatus, onStatusChanged }: Machi
 
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-xl font-semibold text-slate-900">{machine.name}</h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-xl font-semibold text-slate-900">{machine.name}</h2>
+
+              {isAssignedToCurrentUser && (
+                <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-blue-700">
+                  Assigned to you
+                </span>
+              )}
+
+              {!canChangeStatus && !isAssignedToCurrentUser && (
+                <span className="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                  View only
+                </span>
+              )}
+            </div>
 
             <p className="mt-1 text-sm text-slate-500">{machine.code}</p>
           </div>
@@ -200,6 +219,38 @@ export function MachineCard({ machine, canChangeStatus, onStatusChanged }: Machi
           >
             {currentStatus}
           </span>
+        </div>
+
+        <div className="mt-5 rounded-xl border border-white/80 bg-white/75 p-4 shadow-sm backdrop-blur-sm">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Assigned operators
+            </p>
+
+            <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
+              {assignedOperators.length}
+            </span>
+          </div>
+
+          {assignedOperators.length === 0 ? (
+            <p className="mt-3 text-sm text-slate-500">No operator is assigned to this machine.</p>
+          ) : (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {assignedOperators.map((operator) => (
+                <div
+                  key={operator.id}
+                  className="inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1.5"
+                  title={operator.email}
+                >
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white">
+                    {operator.name.trim().charAt(0).toUpperCase()}
+                  </span>
+
+                  <span className="text-xs font-semibold text-indigo-700">{operator.name}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="mt-5 rounded-xl border border-white/80 bg-white/75 p-4 shadow-sm backdrop-blur-sm">

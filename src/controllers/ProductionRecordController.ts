@@ -1,8 +1,20 @@
 import { Request, Response } from "express";
+import { UserRole } from "../entities/User";
 import { AppError } from "../errors/AppError";
+import { MachineService } from "../services/MachineService";
 import { ProductionRecordService } from "../services/ProductionRecordService";
+import { WorkOrderService } from "../services/WorkOrderService";
 
 const productionRecordService = new ProductionRecordService();
+
+const workOrderService = new WorkOrderService();
+
+const machineService = new MachineService();
+
+interface AuthenticatedRequestUser {
+  id: number;
+  role: UserRole;
+}
 
 // Sends an appropriate HTTP response for production record errors
 const handleError = (error: unknown, response: Response): void => {
@@ -32,6 +44,16 @@ export const createProductionRecord = async (
     if (!Number.isInteger(workOrderId) || workOrderId <= 0) {
       throw new AppError("Work order ID must be a positive integer", 400);
     }
+
+    const authUser = response.locals.authUser as AuthenticatedRequestUser | undefined;
+
+    if (!authUser) {
+      throw new AppError("Authentication is required", 401);
+    }
+
+    const workOrder = await workOrderService.getWorkOrderById(workOrderId);
+
+    await machineService.assertCanManageMachine(authUser.id, authUser.role, workOrder.machineId);
 
     const body = request.body as
       | {

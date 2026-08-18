@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../config/api";
 import type { AuthenticatedUser, UserRole } from "../types/auth";
+import type { Machine } from "../types/machine";
 
 interface UserManagementDialogProps {
   currentUserId: number;
@@ -22,34 +23,52 @@ const roleStyles: Record<UserRole, string> = {
 export function UserManagementDialog({ currentUserId, onClose }: UserManagementDialogProps) {
   const [users, setUsers] = useState<AuthenticatedUser[]>([]);
 
+  const [machines, setMachines] = useState<Machine[]>([]);
+
+  const [selectedMachineByUser, setSelectedMachineByUser] = useState<Record<number, string>>({});
+
   const [isLoading, setIsLoading] = useState(true);
 
-  const [updatingUserId, setUpdatingUserId] = useState<number | null>(null);
+  const [updatingKey, setUpdatingKey] = useState<string | null>(null);
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let isCancelled = false;
 
-    const loadUsers = async (): Promise<void> => {
+    const loadData = async (): Promise<void> => {
       try {
-        const response = await apiFetch("/users");
+        const [usersResponse, machinesResponse] = await Promise.all([
+          apiFetch("/users"),
+          apiFetch("/machines"),
+        ]);
 
-        const data = (await response.json()) as AuthenticatedUser[] | ErrorResponse;
+        const [usersData, machinesData] = await Promise.all([
+          usersResponse.json() as Promise<AuthenticatedUser[] | ErrorResponse>,
+          machinesResponse.json() as Promise<Machine[] | ErrorResponse>,
+        ]);
 
-        if (!response.ok) {
-          const errorData = data as ErrorResponse;
+        if (!usersResponse.ok) {
+          const errorData = usersData as ErrorResponse;
 
           throw new Error(errorData.message ?? "Users could not be loaded.");
         }
 
+        if (!machinesResponse.ok) {
+          const errorData = machinesData as ErrorResponse;
+
+          throw new Error(errorData.message ?? "Machines could not be loaded.");
+        }
+
         if (!isCancelled) {
-          setUsers(data as AuthenticatedUser[]);
+          setUsers(usersData as AuthenticatedUser[]);
+          setMachines(machinesData as Machine[]);
           setErrorMessage(null);
         }
       } catch (error) {
         if (!isCancelled) {
-          const message = error instanceof Error ? error.message : "Users could not be loaded.";
+          const message =
+            error instanceof Error ? error.message : "User management data could not be loaded.";
 
           setErrorMessage(message);
         }
@@ -60,16 +79,24 @@ export function UserManagementDialog({ currentUserId, onClose }: UserManagementD
       }
     };
 
-    void loadUsers();
+    void loadData();
 
     return () => {
       isCancelled = true;
     };
   }, []);
 
+  const replaceUpdatedUser = (updatedUser: AuthenticatedUser): void => {
+    setUsers((currentUsers) =>
+      currentUsers.map((user) => (user.id === updatedUser.id ? updatedUser : user)),
+    );
+  };
+
   const changeRole = async (userId: number, role: UserRole): Promise<void> => {
+    const updateKey = `role-${userId}`;
+
     try {
-      setUpdatingUserId(userId);
+      setUpdatingKey(updateKey);
       setErrorMessage(null);
 
       const response = await apiFetch(`/users/${userId}/role`, {
@@ -90,17 +117,85 @@ export function UserManagementDialog({ currentUserId, onClose }: UserManagementD
         throw new Error(errorData.message ?? "User role could not be changed.");
       }
 
-      const updatedUser = data as AuthenticatedUser;
-
-      setUsers((currentUsers) =>
-        currentUsers.map((user) => (user.id === updatedUser.id ? updatedUser : user)),
-      );
+      replaceUpdatedUser(data as AuthenticatedUser);
     } catch (error) {
       const message = error instanceof Error ? error.message : "User role could not be changed.";
 
       setErrorMessage(message);
     } finally {
-      setUpdatingUserId(null);
+      setUpdatingKey(null);
+    }
+  };
+
+  const assignMachine = async (userId: number): Promise<void> => {
+    const machineId = Number(selectedMachineByUser[userId]);
+
+    if (!Number.isInteger(machineId) || machineId <= 0) {
+      setErrorMessage("Please select a machine to assign.");
+
+      return;
+    }
+
+    const updateKey = `assign-${userId}`;
+
+    try {
+      setUpdatingKey(updateKey);
+      setErrorMessage(null);
+
+      const response = await apiFetch(`/users/${userId}/machines/${machineId}`, {
+        method: "POST",
+      });
+
+      const data = (await response.json()) as AuthenticatedUser | ErrorResponse;
+
+      if (!response.ok) {
+        const errorData = data as ErrorResponse;
+
+        throw new Error(errorData.message ?? "Machine could not be assigned.");
+      }
+
+      replaceUpdatedUser(data as AuthenticatedUser);
+
+      setSelectedMachineByUser((currentSelections) => ({
+        ...currentSelections,
+        [userId]: "",
+      }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Machine could not be assigned.";
+
+      setErrorMessage(message);
+    } finally {
+      setUpdatingKey(null);
+    }
+  };
+
+  const removeMachineAssignment = async (userId: number, machineId: number): Promise<void> => {
+    const updateKey = `remove-${userId}-${machineId}`;
+
+    try {
+      setUpdatingKey(updateKey);
+      setErrorMessage(null);
+
+      const response = await apiFetch(`/users/${userId}/machines/${machineId}`, {
+        method: "DELETE",
+      });
+
+      const data = (await response.json()) as AuthenticatedUser | ErrorResponse;
+
+      if (!response.ok) {
+        const errorData = data as ErrorResponse;
+
+        throw new Error(errorData.message ?? "Machine assignment could not be removed.");
+      }
+
+      replaceUpdatedUser(data as AuthenticatedUser);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Machine assignment could not be removed.";
+
+      setErrorMessage(message);
+    } finally {
+      setUpdatingKey(null);
     }
   };
 
@@ -111,7 +206,7 @@ export function UserManagementDialog({ currentUserId, onClose }: UserManagementD
       aria-modal="true"
       aria-labelledby="user-management-title"
     >
-      <div className="mx-auto my-8 w-full max-w-4xl rounded-3xl bg-white p-6 shadow-2xl sm:p-8">
+      <div className="mx-auto my-8 w-full max-w-5xl rounded-3xl bg-white p-6 shadow-2xl sm:p-8">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-blue-600">
@@ -123,7 +218,7 @@ export function UserManagementDialog({ currentUserId, onClose }: UserManagementD
             </h2>
 
             <p className="mt-2 text-sm text-slate-500">
-              Assign viewer, operator or administrator permissions to registered users.
+              Manage user roles and assign production machines to operators.
             </p>
           </div>
 
@@ -144,7 +239,9 @@ export function UserManagementDialog({ currentUserId, onClose }: UserManagementD
         )}
 
         {isLoading && (
-          <p className="mt-6 rounded-xl bg-slate-50 p-5 text-slate-600">Loading users...</p>
+          <p className="mt-6 rounded-xl bg-slate-50 p-5 text-slate-600">
+            Loading users and machines...
+          </p>
         )}
 
         {!isLoading && users.length === 0 && (
@@ -154,84 +251,182 @@ export function UserManagementDialog({ currentUserId, onClose }: UserManagementD
         )}
 
         {!isLoading && users.length > 0 && (
-          <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200">
-            <table className="w-full min-w-[680px] border-collapse text-left">
-              <thead className="bg-slate-50">
-                <tr>
-                  <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    User
-                  </th>
+          <div className="mt-6 grid gap-4">
+            {users.map((user) => {
+              const isCurrentUser = user.id === currentUserId;
 
-                  <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Current role
-                  </th>
+              const assignedMachines = user.assignedMachines ?? [];
 
-                  <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Assign role
-                  </th>
-                </tr>
-              </thead>
+              const availableMachines = machines.filter(
+                (machine) =>
+                  !assignedMachines.some((assignedMachine) => assignedMachine.id === machine.id),
+              );
 
-              <tbody className="divide-y divide-slate-200">
-                {users.map((user) => {
-                  const isCurrentUser = user.id === currentUserId;
+              const roleUpdateKey = `role-${user.id}`;
+              const assignUpdateKey = `assign-${user.id}`;
 
-                  return (
-                    <tr key={user.id} className="bg-white">
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 font-bold text-blue-700">
-                            {user.name.charAt(0).toUpperCase()}
-                          </div>
+              return (
+                <article
+                  key={user.id}
+                  className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+                >
+                  <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-100 font-bold text-blue-700">
+                        {user.name.charAt(0).toUpperCase()}
+                      </div>
 
-                          <div>
-                            <p className="font-semibold text-slate-900">
-                              {user.name}
-                              {isCurrentUser && (
-                                <span className="ml-2 text-xs font-medium text-blue-600">You</span>
-                              )}
-                            </p>
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-semibold text-slate-900">{user.name}</p>
 
-                            <p className="text-sm text-slate-500">{user.email}</p>
-                          </div>
+                          {isCurrentUser && (
+                            <span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-600">
+                              You
+                            </span>
+                          )}
+
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                              roleStyles[user.role]
+                            }`}
+                          >
+                            {user.role}
+                          </span>
                         </div>
-                      </td>
 
-                      <td className="px-5 py-4">
-                        <span
-                          className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${roleStyles[user.role]}`}
-                        >
-                          {user.role}
-                        </span>
-                      </td>
+                        <p className="mt-1 text-sm text-slate-500">{user.email}</p>
+                      </div>
+                    </div>
 
-                      <td className="px-5 py-4">
+                    <div className="w-full sm:w-48">
+                      <label
+                        htmlFor={`role-${user.id}`}
+                        className="text-xs font-semibold uppercase tracking-wide text-slate-500"
+                      >
+                        Assigned role
+                      </label>
+
+                      <select
+                        id={`role-${user.id}`}
+                        value={user.role}
+                        disabled={isCurrentUser || updatingKey !== null}
+                        onChange={(event) =>
+                          void changeRole(user.id, event.target.value as UserRole)
+                        }
+                        className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                      >
+                        {availableRoles.map((role) => (
+                          <option key={role} value={role}>
+                            {role}
+                          </option>
+                        ))}
+                      </select>
+
+                      {updatingKey === roleUpdateKey && (
+                        <p className="mt-1 text-xs text-blue-600">Updating role...</p>
+                      )}
+
+                      {isCurrentUser && (
+                        <p className="mt-1 text-xs text-slate-400">
+                          You cannot change your own role.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {user.role === "OPERATOR" && (
+                    <section className="mt-5 rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
+                      <div>
+                        <h3 className="font-semibold text-slate-900">Assigned Machines</h3>
+
+                        <p className="mt-1 text-sm text-slate-500">
+                          This operator can monitor and manage the machines listed below.
+                        </p>
+                      </div>
+
+                      {assignedMachines.length === 0 ? (
+                        <p className="mt-4 rounded-xl border border-dashed border-blue-200 bg-white p-4 text-sm text-slate-500">
+                          No machines have been assigned to this operator.
+                        </p>
+                      ) : (
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          {assignedMachines.map((machine) => {
+                            const removeUpdateKey = `remove-${user.id}-${machine.id}`;
+
+                            return (
+                              <div
+                                key={machine.id}
+                                className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-white px-3 py-2"
+                              >
+                                <div>
+                                  <p className="text-sm font-semibold text-slate-800">
+                                    {machine.code}
+                                  </p>
+
+                                  <p className="text-xs text-slate-500">{machine.name}</p>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  disabled={updatingKey !== null}
+                                  onClick={() => void removeMachineAssignment(user.id, machine.id)}
+                                  className="ml-2 rounded-lg bg-red-50 px-2 py-1 text-xs font-bold text-red-600 transition hover:bg-red-100 disabled:opacity-50"
+                                  aria-label={`Remove ${machine.name} from ${user.name}`}
+                                >
+                                  {updatingKey === removeUpdateKey ? "..." : "X"}
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      <div className="mt-4 flex flex-col gap-3 sm:flex-row">
                         <select
-                          value={user.role}
-                          disabled={isCurrentUser || updatingUserId === user.id}
+                          value={selectedMachineByUser[user.id] ?? ""}
+                          disabled={updatingKey !== null || availableMachines.length === 0}
                           onChange={(event) =>
-                            void changeRole(user.id, event.target.value as UserRole)
+                            setSelectedMachineByUser((currentSelections) => ({
+                              ...currentSelections,
+                              [user.id]: event.target.value,
+                            }))
                           }
-                          className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                          className="flex-1 rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-blue-500 disabled:bg-slate-100"
                         >
-                          {availableRoles.map((role) => (
-                            <option key={role} value={role}>
-                              {role}
+                          <option value="">Select a machine</option>
+
+                          {availableMachines.map((machine) => (
+                            <option key={machine.id} value={machine.id}>
+                              {machine.code} - {machine.name}
                             </option>
                           ))}
                         </select>
 
-                        {isCurrentUser && (
-                          <p className="mt-1 text-xs text-slate-400">
-                            You cannot change your own role.
-                          </p>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        <button
+                          type="button"
+                          disabled={
+                            updatingKey !== null ||
+                            availableMachines.length === 0 ||
+                            !selectedMachineByUser[user.id]
+                          }
+                          onClick={() => void assignMachine(user.id)}
+                          className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {updatingKey === assignUpdateKey ? "Assigning..." : "Assign Machine"}
+                        </button>
+                      </div>
+
+                      {availableMachines.length === 0 && machines.length > 0 && (
+                        <p className="mt-2 text-xs font-semibold text-blue-700">
+                          All machines are already assigned to this operator.
+                        </p>
+                      )}
+                    </section>
+                  )}
+                </article>
+              );
+            })}
           </div>
         )}
 

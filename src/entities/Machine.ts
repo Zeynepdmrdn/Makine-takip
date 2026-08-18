@@ -1,6 +1,14 @@
-import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn } from "typeorm";
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  ManyToMany,
+  OneToMany,
+  PrimaryGeneratedColumn,
+} from "typeorm";
 import { MachineStatus } from "./MachineStatus";
 import { SensorReading } from "./SensorReading";
+import { User } from "./User";
 
 // Represents a machine entity stored in the database
 @Entity()
@@ -10,15 +18,22 @@ export class Machine {
   id!: number;
 
   // Human-readable name of the machine
-  @Column({ type: "text" })
+  @Column({
+    type: "text",
+  })
   name!: string;
 
   // Unique code used to identify the machine
-  @Column({ type: "text", unique: true })
+  @Column({
+    type: "text",
+    unique: true,
+  })
   code!: string;
 
   // Date and time when the machine was created
-  @CreateDateColumn({ type: "datetime" })
+  @CreateDateColumn({
+    type: "datetime",
+  })
   createdAt!: Date;
 
   // Status history of the machine
@@ -28,4 +43,8 @@ export class Machine {
   // Sensor readings recorded for the machine
   @OneToMany(() => SensorReading, (sensorReading) => sensorReading.machine)
   sensorReadings!: SensorReading[];
+
+  // Operators assigned to this machine
+  @ManyToMany(() => User, (user) => user.assignedMachines)
+  operators!: User[];
 }

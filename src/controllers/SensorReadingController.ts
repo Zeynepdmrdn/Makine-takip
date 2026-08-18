@@ -1,8 +1,17 @@
 import { Request, Response } from "express";
+import { UserRole } from "../entities/User";
 import { AppError } from "../errors/AppError";
+import { MachineService } from "../services/MachineService";
 import { SensorReadingService } from "../services/SensorReadingService";
 
 const sensorReadingService = new SensorReadingService();
+
+const machineService = new MachineService();
+
+interface AuthenticatedRequestUser {
+  id: number;
+  role: UserRole;
+}
 
 // Converts an optional query parameter into a valid date
 const parseDateQuery = (value: unknown, parameterName: string): Date | undefined => {
@@ -29,6 +38,7 @@ const handleError = (error: unknown, response: Response): void => {
     response.status(error.statusCode).json({
       message: error.message,
     });
+
     return;
   }
 
@@ -47,6 +57,14 @@ export const createSensorReading = async (request: Request, response: Response):
     if (!Number.isInteger(machineId) || machineId <= 0) {
       throw new AppError("Invalid machine ID", 400);
     }
+
+    const authUser = response.locals.authUser as AuthenticatedRequestUser | undefined;
+
+    if (!authUser) {
+      throw new AppError("Authentication is required", 401);
+    }
+
+    await machineService.assertCanManageMachine(authUser.id, authUser.role, machineId);
 
     const body = request.body as
       | {
@@ -91,6 +109,7 @@ export const getSensorReadings = async (request: Request, response: Response): P
     }
 
     const from = parseDateQuery(request.query.from, "from");
+
     const to = parseDateQuery(request.query.to, "to");
 
     if (from && to && from > to) {

@@ -67,3 +67,55 @@ export const changeUserRole = async (request: Request, response: Response): Prom
     handleError(error, response);
   }
 };
+
+// Assigns one machine to an operator
+export const assignMachineToOperator = async (
+  request: Request,
+  response: Response,
+): Promise<void> => {
+  try {
+    const targetUserId = Number(request.params.id);
+
+    const machineId = Number(request.params.machineId);
+
+    if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
+      throw new AppError("User ID must be a positive integer", 400);
+    }
+
+    if (!Number.isInteger(machineId) || machineId <= 0) {
+      throw new AppError("Machine ID must be a positive integer", 400);
+    }
+
+    const updatedUser = await userService.assignMachine(targetUserId, machineId);
+
+    response.status(200).json(updatedUser);
+  } catch (error) {
+    handleError(error, response);
+  }
+};
+
+// Removes one machine assignment from an operator
+export const removeMachineFromOperator = async (
+  request: Request,
+  response: Response,
+): Promise<void> => {
+  try {
+    const targetUserId = Number(request.params.id);
+
+    const machineId = Number(request.params.machineId);
+
+    if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
+      throw new AppError("User ID must be a positive integer", 400);
+    }
+
+    if (!Number.isInteger(machineId) || machineId <= 0) {
+      throw new AppError("Machine ID must be a positive integer", 400);
+    }
+
+    const updatedUser = await userService.removeMachineAssignment(targetUserId, machineId);
+
+    response.status(200).json(updatedUser);
+  } catch (error) {
+    handleError(error, response);
+  }
+};

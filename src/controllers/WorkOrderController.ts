@@ -1,8 +1,17 @@
 import { Request, Response } from "express";
+import { UserRole } from "../entities/User";
 import { AppError } from "../errors/AppError";
+import { MachineService } from "../services/MachineService";
 import { WorkOrderService } from "../services/WorkOrderService";
 
 const workOrderService = new WorkOrderService();
+
+const machineService = new MachineService();
+
+interface AuthenticatedRequestUser {
+  id: number;
+  role: UserRole;
+}
 
 // Sends an appropriate HTTP response for work order errors
 const handleError = (error: unknown, response: Response): void => {
@@ -19,6 +28,16 @@ const handleError = (error: unknown, response: Response): void => {
   response.status(500).json({
     message: "Internal server error",
   });
+};
+
+const getAuthenticatedUser = (response: Response): AuthenticatedRequestUser => {
+  const authUser = response.locals.authUser as AuthenticatedRequestUser | undefined;
+
+  if (!authUser) {
+    throw new AppError("Authentication is required", 401);
+  }
+
+  return authUser;
 };
 
 // Creates a new planned work order
@@ -93,9 +112,15 @@ export const startWorkOrder = async (request: Request, response: Response): Prom
       throw new AppError("Work order ID must be a positive integer", 400);
     }
 
-    const workOrder = await workOrderService.startWorkOrder(workOrderId);
+    const authUser = getAuthenticatedUser(response);
 
-    response.status(200).json(workOrder);
+    const workOrder = await workOrderService.getWorkOrderById(workOrderId);
+
+    await machineService.assertCanManageMachine(authUser.id, authUser.role, workOrder.machineId);
+
+    const startedWorkOrder = await workOrderService.startWorkOrder(workOrderId);
+
+    response.status(200).json(startedWorkOrder);
   } catch (error) {
     handleError(error, response);
   }
@@ -110,9 +135,15 @@ export const completeWorkOrder = async (request: Request, response: Response): P
       throw new AppError("Work order ID must be a positive integer", 400);
     }
 
-    const workOrder = await workOrderService.completeWorkOrder(workOrderId);
+    const authUser = getAuthenticatedUser(response);
 
-    response.status(200).json(workOrder);
+    const workOrder = await workOrderService.getWorkOrderById(workOrderId);
+
+    await machineService.assertCanManageMachine(authUser.id, authUser.role, workOrder.machineId);
+
+    const completedWorkOrder = await workOrderService.completeWorkOrder(workOrderId);
+
+    response.status(200).json(completedWorkOrder);
   } catch (error) {
     handleError(error, response);
   }

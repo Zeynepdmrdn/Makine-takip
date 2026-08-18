@@ -1,11 +1,18 @@
 import { Request, Response } from "express";
 import { MachineStatusType } from "../entities/MachineStatus";
+import { UserRole } from "../entities/User";
 import { AppError } from "../errors/AppError";
 import { MachineService } from "../services/MachineService";
 import { MachineStatusService } from "../services/MachineStatusService";
 
 const machineService = new MachineService();
+
 const machineStatusService = new MachineStatusService();
+
+interface AuthenticatedRequestUser {
+  id: number;
+  role: UserRole;
+}
 
 // Sends an appropriate HTTP response for an error
 const handleError = (error: unknown, response: Response): void => {
@@ -13,6 +20,7 @@ const handleError = (error: unknown, response: Response): void => {
     response.status(error.statusCode).json({
       message: error.message,
     });
+
     return;
   }
 
@@ -51,10 +59,10 @@ export const createMachine = async (request: Request, response: Response): Promi
   }
 };
 
-// Returns all machines
+// Returns all machines with safe operator summaries
 export const getAllMachines = async (_request: Request, response: Response): Promise<void> => {
   try {
-    const machines = await machineService.getAllMachines();
+    const machines = await machineService.getMachineOverviews();
 
     response.status(200).json(machines);
   } catch (error) {
@@ -65,13 +73,13 @@ export const getAllMachines = async (_request: Request, response: Response): Pro
 // Returns one machine by its ID
 export const getMachineById = async (request: Request, response: Response): Promise<void> => {
   try {
-    const id = Number(request.params.id);
+    const machineId = Number(request.params.id);
 
-    if (!Number.isInteger(id) || id <= 0) {
+    if (!Number.isInteger(machineId) || machineId <= 0) {
       throw new AppError("Machine ID must be a positive integer", 400);
     }
 
-    const machine = await machineService.getMachineById(id);
+    const machine = await machineService.getMachineDetailsById(machineId);
 
     response.status(200).json(machine);
   } catch (error) {
@@ -87,6 +95,16 @@ export const changeMachineStatus = async (request: Request, response: Response):
     if (!Number.isInteger(machineId) || machineId <= 0) {
       throw new AppError("Machine ID must be a positive integer", 400);
     }
+
+    const authUser = response.locals.authUser as AuthenticatedRequestUser | undefined;
+
+    if (!authUser) {
+      throw new AppError("Authentication is required", 401);
+    }
+
+    // ADMIN can manage every machine.
+    // OPERATOR can manage only assigned machines.
+    await machineService.assertCanManageMachine(authUser.id, authUser.role, machineId);
 
     const body = request.body as {
       status?: unknown;
@@ -125,6 +143,7 @@ export const getMachineAvailability = async (
 ): Promise<void> => {
   try {
     const machineId = Number(request.params.id);
+
     const { from, to } = request.query;
 
     if (!Number.isInteger(machineId) || machineId <= 0) {
