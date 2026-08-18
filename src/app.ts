@@ -9,7 +9,8 @@ import { authRouter } from "./routes/authRoutes";
 import { machineRouter } from "./routes/machineRoutes";
 import { simulationRouter } from "./routes/simulationRoutes";
 import { userRouter } from "./routes/userRoutes";
-
+import { productRouter } from "./routes/productRoutes";
+import { workOrderRouter } from "./routes/workOrderRoutes";
 // Create an Express application
 const app = express();
 
@@ -28,9 +29,9 @@ app.use("/auth", authRouter);
 
 // Protected application routes
 app.use("/machines", requireAuth, machineRouter);
-
+app.use("/products", requireAuth, productRouter);
+app.use("/work-orders", requireAuth, workOrderRouter);
 app.use("/simulation", requireAuth, simulationRouter);
-
 // Only administrators can list users and change roles
 app.use("/users", requireAuth, requireRole(UserRole.ADMIN), userRouter);
 

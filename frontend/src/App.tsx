@@ -2,8 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 import { AddMachineDialog } from "./components/AddMachineDialog";
 import { AuthPage } from "./components/AuthPage";
 import { MachineCard } from "./components/MachineCard";
+import { ProductManagementDialog } from "./components/ProductManagementDialog";
 import { SimulationControls } from "./components/SimulationControls";
 import { UserManagementDialog } from "./components/UserManagementDialog";
+import { WorkOrderManagementDialog } from "./components/WorkOrderManagementDialog";
 import { apiFetch } from "./config/api";
 import { clearAuthentication, getStoredUser, saveAuthenticatedUser } from "./config/auth";
 import type { AuthenticatedUser } from "./types/auth";
@@ -25,14 +27,16 @@ function App() {
   );
 
   const [machines, setMachines] = useState<Machine[]>([]);
-
   const [isLoading, setIsLoading] = useState(true);
-
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const [isAddMachineDialogOpen, setIsAddMachineDialogOpen] = useState(false);
 
   const [isUserManagementDialogOpen, setIsUserManagementDialogOpen] = useState(false);
+
+  const [isProductManagementDialogOpen, setIsProductManagementDialogOpen] = useState(false);
+
+  const [isWorkOrderManagementDialogOpen, setIsWorkOrderManagementDialogOpen] = useState(false);
 
   const authenticatedUserId = authenticatedUser?.id;
 
@@ -82,7 +86,7 @@ function App() {
     };
   }, [authenticatedUserId]);
 
-  // Refreshes the authenticated user's current database role
+  // Refreshes the current user's latest database role
   useEffect(() => {
     if (!authenticatedUserId) {
       return;
@@ -123,7 +127,7 @@ function App() {
     };
   }, [authenticatedUserId]);
 
-  // Refreshes cards so automatic status changes become visible
+  // Refreshes machine cards so automatic changes become visible
   useEffect(() => {
     if (!authenticatedUserId) {
       return;
@@ -146,21 +150,25 @@ function App() {
 
   const handleLogout = (): void => {
     clearAuthentication();
+
     setAuthenticatedUser(null);
     setMachines([]);
     setErrorMessage(null);
+
     setIsAddMachineDialogOpen(false);
     setIsUserManagementDialogOpen(false);
+    setIsProductManagementDialogOpen(false);
+    setIsWorkOrderManagementDialogOpen(false);
   };
-
-  const isAdmin = authenticatedUser?.role === "ADMIN";
-
-  const canChangeMachineStatus =
-    authenticatedUser?.role === "ADMIN" || authenticatedUser?.role === "OPERATOR";
 
   if (!authenticatedUser) {
     return <AuthPage onAuthenticated={handleAuthenticated} />;
   }
+
+  const isAdmin = authenticatedUser.role === "ADMIN";
+
+  const canChangeMachineStatus =
+    authenticatedUser.role === "ADMIN" || authenticatedUser.role === "OPERATOR";
 
   return (
     <main className="min-h-screen bg-slate-100">
@@ -186,6 +194,14 @@ function App() {
                 <p className="mt-1 text-xs font-semibold text-blue-600">{authenticatedUser.role}</p>
               </div>
 
+              <button
+                type="button"
+                onClick={() => setIsWorkOrderManagementDialogOpen(true)}
+                className="rounded-xl border border-orange-300 bg-orange-50 px-5 py-3 text-sm font-semibold text-orange-700 transition hover:bg-orange-100"
+              >
+                Work Orders
+              </button>
+
               {isAdmin && (
                 <>
                   <button
@@ -194,6 +210,14 @@ function App() {
                     className="rounded-xl border border-violet-300 bg-violet-50 px-5 py-3 text-sm font-semibold text-violet-700 transition hover:bg-violet-100"
                   >
                     Manage Users
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsProductManagementDialogOpen(true)}
+                    className="rounded-xl border border-emerald-300 bg-emerald-50 px-5 py-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                  >
+                    Products
                   </button>
 
                   <button
@@ -250,10 +274,21 @@ function App() {
         />
       )}
 
+      {isAdmin && isProductManagementDialogOpen && (
+        <ProductManagementDialog onClose={() => setIsProductManagementDialogOpen(false)} />
+      )}
+
       {isAdmin && isUserManagementDialogOpen && (
         <UserManagementDialog
           currentUserId={authenticatedUser.id}
           onClose={() => setIsUserManagementDialogOpen(false)}
+        />
+      )}
+
+      {isWorkOrderManagementDialogOpen && (
+        <WorkOrderManagementDialog
+          currentUserRole={authenticatedUser.role}
+          onClose={() => setIsWorkOrderManagementDialogOpen(false)}
         />
       )}
     </main>

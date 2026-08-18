@@ -1,10 +1,18 @@
+import { AppDataSource } from "../database/data-source";
 import { MachineStatusType } from "../entities/MachineStatus";
+import { WorkOrder, WorkOrderStatus } from "../entities/WorkOrder";
 import { MachineService } from "./MachineService";
 import { MachineStatusService } from "./MachineStatusService";
+import { ProductionRecordService } from "./ProductionRecordService";
 import { SensorReadingService } from "./SensorReadingService";
 
 const SENSOR_INTERVAL_MS = 5_000;
+const PRODUCTION_INTERVAL_MS = 5_000;
 const STATUS_INTERVAL_MS = 20_000;
+
+const EXPECTED_PRODUCTION_QUANTITY = 10;
+const MINIMUM_PRODUCTION_QUANTITY = 7;
+const MAXIMUM_PRODUCTION_QUANTITY = 13;
 
 interface GeneratedSensorValues {
   temperature: number;
@@ -19,30 +27,40 @@ export class SimulationService {
 
   private readonly sensorReadingService = new SensorReadingService();
 
+  private readonly productionRecordService = new ProductionRecordService();
+
   private sensorTimer: ReturnType<typeof setInterval> | null = null;
+
+  private productionTimer: ReturnType<typeof setInterval> | null = null;
 
   private statusTimer: ReturnType<typeof setInterval> | null = null;
 
   private isSensorCycleRunning = false;
+  private isProductionCycleRunning = false;
   private isStatusCycleRunning = false;
 
   // Returns whether the demo simulation is active
   isRunning(): boolean {
-    return this.sensorTimer !== null || this.statusTimer !== null;
+    return this.sensorTimer !== null || this.productionTimer !== null || this.statusTimer !== null;
   }
 
-  // Starts automatic sensor and status generation
+  // Starts automatic sensor, production and status generation
   start(): void {
     if (this.isRunning()) {
       return;
     }
 
-    // Produce the first sensor records without waiting 5 seconds
+    // Produces initial records without waiting for the first interval
     void this.runSensorCycle();
+    void this.runProductionCycle();
 
     this.sensorTimer = setInterval(() => {
       void this.runSensorCycle();
     }, SENSOR_INTERVAL_MS);
+
+    this.productionTimer = setInterval(() => {
+      void this.runProductionCycle();
+    }, PRODUCTION_INTERVAL_MS);
 
     this.statusTimer = setInterval(() => {
       void this.runStatusCycle();
@@ -56,12 +74,18 @@ export class SimulationService {
       this.sensorTimer = null;
     }
 
+    if (this.productionTimer !== null) {
+      clearInterval(this.productionTimer);
+      this.productionTimer = null;
+    }
+
     if (this.statusTimer !== null) {
       clearInterval(this.statusTimer);
       this.statusTimer = null;
     }
 
     this.isSensorCycleRunning = false;
+    this.isProductionCycleRunning = false;
     this.isStatusCycleRunning = false;
   }
 
@@ -96,6 +120,82 @@ export class SimulationService {
       console.error("Automatic sensor generation failed:", error);
     } finally {
       this.isSensorCycleRunning = false;
+    }
+  }
+
+  // Produces quantity for active work orders whose machines are running
+  private async runProductionCycle(): Promise<void> {
+    if (this.isProductionCycleRunning) {
+      return;
+    }
+
+    this.isProductionCycleRunning = true;
+
+    try {
+      const workOrderRepository = AppDataSource.getRepository(WorkOrder);
+
+      const activeWorkOrders = await workOrderRepository.find({
+        where: {
+          status: WorkOrderStatus.IN_PROGRESS,
+        },
+        order: {
+          id: "ASC",
+        },
+      });
+
+      if (activeWorkOrders.length === 0) {
+        return;
+      }
+
+      const machines = await this.machineService.getAllMachines();
+
+      const currentStatusByMachineId = new Map<number, MachineStatusType>();
+
+      for (const machine of machines) {
+        const currentStatus =
+          machine.statuses.find((status) => status.endedAt === null)?.status ??
+          MachineStatusType.IDLE;
+
+        currentStatusByMachineId.set(machine.id, currentStatus);
+      }
+
+      await Promise.all(
+        activeWorkOrders.map(async (workOrder) => {
+          const currentStatus = currentStatusByMachineId.get(workOrder.machineId);
+
+          if (currentStatus !== MachineStatusType.RUNNING) {
+            return;
+          }
+
+          if (workOrder.actualQuantity >= workOrder.targetQuantity) {
+            return;
+          }
+
+          const generatedQuantity = this.randomInteger(
+            MINIMUM_PRODUCTION_QUANTITY,
+            MAXIMUM_PRODUCTION_QUANTITY,
+          );
+
+          try {
+            // Uses the existing service so production business rules
+            // and the transaction are never bypassed
+            await this.productionRecordService.createRecord({
+              workOrderId: workOrder.id,
+              expectedQuantity: EXPECTED_PRODUCTION_QUANTITY,
+              quantity: generatedQuantity,
+            });
+          } catch (error) {
+            console.error(
+              `Automatic production generation failed for work order ${workOrder.code}:`,
+              error,
+            );
+          }
+        }),
+      );
+    } catch (error) {
+      console.error("Automatic production cycle failed:", error);
+    } finally {
+      this.isProductionCycleRunning = false;
     }
   }
 
@@ -146,7 +246,7 @@ export class SimulationService {
     }
   }
 
-  // Produces realistic values according to the machine status
+  // Produces realistic sensor values according to machine status
   private generateSensorValues(status: MachineStatusType): GeneratedSensorValues {
     switch (status) {
       case MachineStatusType.RUNNING:
@@ -180,10 +280,15 @@ export class SimulationService {
     }
   }
 
-  // Creates a random number with one decimal digit
+  // Creates a random decimal number with one decimal digit
   private randomValue(minimum: number, maximum: number): number {
     const value = minimum + Math.random() * (maximum - minimum);
 
     return Number(value.toFixed(1));
+  }
+
+  // Creates a random integer including both limits
+  private randomInteger(minimum: number, maximum: number): number {
+    return Math.floor(Math.random() * (maximum - minimum + 1)) + minimum;
   }
 }

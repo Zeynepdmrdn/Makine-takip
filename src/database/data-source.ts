@@ -2,8 +2,11 @@ import "reflect-metadata";
 import { DataSource } from "typeorm";
 import { Machine } from "../entities/Machine";
 import { MachineStatus } from "../entities/MachineStatus";
+import { Product } from "../entities/Product";
+import { ProductionRecord } from "../entities/ProductionRecord";
 import { SensorReading } from "../entities/SensorReading";
 import { User } from "../entities/User";
+import { WorkOrder } from "../entities/WorkOrder";
 
 // Configures the application's database connection
 export const AppDataSource = new DataSource({
@@ -11,5 +14,5 @@ export const AppDataSource = new DataSource({
   database: "database.sqlite",
   synchronize: true,
   logging: false,
-  entities: [Machine, MachineStatus, SensorReading, User],
+  entities: [Machine, MachineStatus, Product, ProductionRecord, SensorReading, User, WorkOrder],
 });
