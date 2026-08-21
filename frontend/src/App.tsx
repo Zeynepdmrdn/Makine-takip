@@ -7,6 +7,7 @@ import { SimulationControls } from "./components/SimulationControls";
 import { UserManagementDialog } from "./components/UserManagementDialog";
 import { WorkOrderManagementDialog } from "./components/WorkOrderManagementDialog";
 import { apiFetch } from "./config/api";
+import { WorkOrderTargetNotifications } from "./components/WorkOrderTargetNotifications";
 import { clearAuthentication, getStoredUser, saveAuthenticatedUser } from "./config/auth";
 import type { AuthenticatedUser } from "./types/auth";
 import type { Machine } from "./types/machine";
@@ -426,6 +427,11 @@ function App() {
           onClose={() => setIsWorkOrderManagementDialogOpen(false)}
         />
       )}
+
+      <WorkOrderTargetNotifications
+        currentUserId={authenticatedUser.id}
+        currentUserRole={authenticatedUser.role}
+      />
     </main>
   );
 }
