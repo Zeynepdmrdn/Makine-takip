@@ -1,7 +1,9 @@
 import { AppDataSource } from "../database/data-source";
+import { MachineActivitySource, MachineActivityType } from "../entities/MachineActivity";
 import { Machine } from "../entities/Machine";
 import { User, UserRole } from "../entities/User";
 import { AppError } from "../errors/AppError";
+import { MachineActivityService } from "./MachineActivityService";
 
 export interface SafeAssignedMachine {
   id: number;
@@ -19,6 +21,8 @@ export interface SafeUser {
 }
 
 export class UserService {
+  private readonly machineActivityService = new MachineActivityService();
+
   // Returns all users without exposing password hashes
   async getAllUsers(): Promise<SafeUser[]> {
     const userRepository = AppDataSource.getRepository(User);
@@ -32,10 +36,11 @@ export class UserService {
       },
     });
 
-    return users.map((user) => this.toSafeUser(user));
+    return users.map((user: User) => this.toSafeUser(user));
   }
 
-  // Updates a user's role while protecting critical admin rules
+  // Updates a user's role while protecting
+  // critical administrator rules
   async updateUserRole(
     authenticatedUserId: number,
     targetUserId: number,
@@ -76,7 +81,7 @@ export class UserService {
 
     targetUser.role = role;
 
-    // Machine assignments are meaningful only for operators
+    // Machine assignments belong only to operators
     if (role !== UserRole.OPERATOR) {
       targetUser.assignedMachines = [];
     }
@@ -87,7 +92,11 @@ export class UserService {
   }
 
   // Assigns one machine to an operator
-  async assignMachine(targetUserId: number, machineId: number): Promise<SafeUser> {
+  async assignMachine(
+    targetUserId: number,
+    machineId: number,
+    performedByUserId?: number,
+  ): Promise<SafeUser> {
     const userRepository = AppDataSource.getRepository(User);
 
     const machineRepository = AppDataSource.getRepository(Machine);
@@ -118,7 +127,7 @@ export class UserService {
     }
 
     const alreadyAssigned = targetUser.assignedMachines.some(
-      (assignedMachine) => assignedMachine.id === machine.id,
+      (assignedMachine: Machine) => assignedMachine.id === machine.id,
     );
 
     if (alreadyAssigned) {
@@ -129,12 +138,29 @@ export class UserService {
 
     const savedUser = await userRepository.save(targetUser);
 
+    const source = performedByUserId ? MachineActivitySource.USER : MachineActivitySource.SYSTEM;
+
+    await this.machineActivityService.createActivity({
+      machineId,
+      activityType: MachineActivityType.OPERATOR_ASSIGNED,
+      source,
+      performedByUserId: performedByUserId ?? null,
+      performedByName: performedByUserId ? null : "System",
+      reason: `${targetUser.name} was assigned to ${machine.code}`,
+    });
+
     return this.toSafeUser(savedUser);
   }
 
   // Removes one machine assignment from an operator
-  async removeMachineAssignment(targetUserId: number, machineId: number): Promise<SafeUser> {
+  async removeMachineAssignment(
+    targetUserId: number,
+    machineId: number,
+    performedByUserId?: number,
+  ): Promise<SafeUser> {
     const userRepository = AppDataSource.getRepository(User);
+
+    const machineRepository = AppDataSource.getRepository(Machine);
 
     const targetUser = await userRepository.findOne({
       where: {
@@ -153,8 +179,16 @@ export class UserService {
       throw new AppError("Machine assignments only belong to operators", 400);
     }
 
+    const machine = await machineRepository.findOneBy({
+      id: machineId,
+    });
+
+    if (!machine) {
+      throw new AppError("Machine not found", 404);
+    }
+
     const assignmentExists = targetUser.assignedMachines.some(
-      (machine) => machine.id === machineId,
+      (assignedMachine: Machine) => assignedMachine.id === machineId,
     );
 
     if (!assignmentExists) {
@@ -162,15 +196,26 @@ export class UserService {
     }
 
     targetUser.assignedMachines = targetUser.assignedMachines.filter(
-      (machine) => machine.id !== machineId,
+      (assignedMachine: Machine) => assignedMachine.id !== machineId,
     );
 
     const savedUser = await userRepository.save(targetUser);
 
+    const source = performedByUserId ? MachineActivitySource.USER : MachineActivitySource.SYSTEM;
+
+    await this.machineActivityService.createActivity({
+      machineId,
+      activityType: MachineActivityType.OPERATOR_REMOVED,
+      source,
+      performedByUserId: performedByUserId ?? null,
+      performedByName: performedByUserId ? null : "System",
+      reason: `${targetUser.name} was removed from ${machine.code}`,
+    });
+
     return this.toSafeUser(savedUser);
   }
 
-  // Removes sensitive authentication information from API responses
+  // Removes sensitive authentication information
   private toSafeUser(user: User): SafeUser {
     return {
       id: user.id,
@@ -178,7 +223,7 @@ export class UserService {
       email: user.email,
       role: user.role,
       createdAt: user.createdAt,
-      assignedMachines: (user.assignedMachines ?? []).map((machine) => ({
+      assignedMachines: (user.assignedMachines ?? []).map((machine: Machine) => ({
         id: machine.id,
         name: machine.name,
         code: machine.code,

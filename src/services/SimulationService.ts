@@ -1,14 +1,18 @@
 import { AppDataSource } from "../database/data-source";
+import { MachineActivitySource } from "../entities/MachineActivity";
 import { MachineStatusType } from "../entities/MachineStatus";
+import { User } from "../entities/User";
 import { WorkOrder, WorkOrderStatus } from "../entities/WorkOrder";
 import { MachineService } from "./MachineService";
 import { MachineStatusService } from "./MachineStatusService";
 import { ProductionRecordService } from "./ProductionRecordService";
 import { SensorReadingService } from "./SensorReadingService";
+import { WorkOrderService } from "./WorkOrderService";
 
 const SENSOR_INTERVAL_MS = 5_000;
 const PRODUCTION_INTERVAL_MS = 5_000;
 const STATUS_INTERVAL_MS = 20_000;
+const OPERATION_INTERVAL_MS = 10_000;
 
 const EXPECTED_PRODUCTION_QUANTITY = 10;
 const MINIMUM_PRODUCTION_QUANTITY = 7;
@@ -29,30 +33,44 @@ export class SimulationService {
 
   private readonly productionRecordService = new ProductionRecordService();
 
+  private readonly workOrderService = new WorkOrderService();
+
   private sensorTimer: ReturnType<typeof setInterval> | null = null;
 
   private productionTimer: ReturnType<typeof setInterval> | null = null;
 
   private statusTimer: ReturnType<typeof setInterval> | null = null;
 
+  private operationTimer: ReturnType<typeof setInterval> | null = null;
+
   private isSensorCycleRunning = false;
+
   private isProductionCycleRunning = false;
+
   private isStatusCycleRunning = false;
+
+  private isOperationCycleRunning = false;
 
   // Returns whether the demo simulation is active
   isRunning(): boolean {
-    return this.sensorTimer !== null || this.productionTimer !== null || this.statusTimer !== null;
+    return (
+      this.sensorTimer !== null ||
+      this.productionTimer !== null ||
+      this.statusTimer !== null ||
+      this.operationTimer !== null
+    );
   }
 
-  // Starts automatic sensor, production and status generation
+  // Starts automatic factory simulation
   start(): void {
     if (this.isRunning()) {
       return;
     }
 
-    // Produces initial records without waiting for the first interval
+    // Creates initial demo data immediately
     void this.runSensorCycle();
     void this.runProductionCycle();
+    void this.runOperationCycle();
 
     this.sensorTimer = setInterval(() => {
       void this.runSensorCycle();
@@ -65,6 +83,10 @@ export class SimulationService {
     this.statusTimer = setInterval(() => {
       void this.runStatusCycle();
     }, STATUS_INTERVAL_MS);
+
+    this.operationTimer = setInterval(() => {
+      void this.runOperationCycle();
+    }, OPERATION_INTERVAL_MS);
   }
 
   // Stops all automatic generation
@@ -84,9 +106,15 @@ export class SimulationService {
       this.statusTimer = null;
     }
 
+    if (this.operationTimer !== null) {
+      clearInterval(this.operationTimer);
+      this.operationTimer = null;
+    }
+
     this.isSensorCycleRunning = false;
     this.isProductionCycleRunning = false;
     this.isStatusCycleRunning = false;
+    this.isOperationCycleRunning = false;
   }
 
   // Creates one sensor reading for every machine
@@ -123,7 +151,8 @@ export class SimulationService {
     }
   }
 
-  // Produces quantity for active work orders whose machines are running
+  // Produces quantity for active work orders
+  // whose machines are running
   private async runProductionCycle(): Promise<void> {
     if (this.isProductionCycleRunning) {
       return;
@@ -160,7 +189,7 @@ export class SimulationService {
       }
 
       await Promise.all(
-        activeWorkOrders.map(async (workOrder) => {
+        activeWorkOrders.map(async (workOrder: WorkOrder) => {
           const currentStatus = currentStatusByMachineId.get(workOrder.machineId);
 
           if (currentStatus !== MachineStatusType.RUNNING) {
@@ -177,8 +206,6 @@ export class SimulationService {
           );
 
           try {
-            // Uses the existing service so production business rules
-            // and the transaction are never bypassed
             await this.productionRecordService.createRecord({
               workOrderId: workOrder.id,
               expectedQuantity: EXPECTED_PRODUCTION_QUANTITY,
@@ -199,7 +226,150 @@ export class SimulationService {
     }
   }
 
-  // Changes the status of one randomly selected machine
+  // Completes reached orders and assigns idle operators
+  // to suitable planned work orders
+  private async runOperationCycle(): Promise<void> {
+    if (this.isOperationCycleRunning) {
+      return;
+    }
+
+    this.isOperationCycleRunning = true;
+
+    try {
+      const workOrderRepository = AppDataSource.getRepository(WorkOrder);
+
+      const activeWorkOrders = await workOrderRepository.find({
+        where: {
+          status: WorkOrderStatus.IN_PROGRESS,
+        },
+        order: {
+          id: "ASC",
+        },
+      });
+
+      // Automatically completes work orders whose targets
+      // have been reached, releasing their operators
+      for (const workOrder of activeWorkOrders) {
+        if (workOrder.actualQuantity >= workOrder.targetQuantity) {
+          try {
+            await this.workOrderService.completeWorkOrder(workOrder.id);
+          } catch (error) {
+            console.error(`Automatic completion failed for work order ${workOrder.code}:`, error);
+          }
+        }
+      }
+
+      const refreshedActiveWorkOrders = await workOrderRepository.find({
+        where: {
+          status: WorkOrderStatus.IN_PROGRESS,
+        },
+        order: {
+          id: "ASC",
+        },
+      });
+
+      const plannedWorkOrders = await workOrderRepository.find({
+        where: {
+          status: WorkOrderStatus.PLANNED,
+        },
+        relations: {
+          machine: {
+            operators: true,
+          },
+        },
+        order: {
+          id: "ASC",
+        },
+      });
+
+      if (plannedWorkOrders.length === 0) {
+        return;
+      }
+
+      const activeMachineIds = new Set<number>(
+        refreshedActiveWorkOrders.map((workOrder: WorkOrder) => workOrder.machineId),
+      );
+
+      const activeOperatorIds = new Set<number>(
+        refreshedActiveWorkOrders
+          .map((workOrder: WorkOrder) => workOrder.startedByUserId)
+          .filter((userId: number | null): userId is number => userId !== null),
+      );
+
+      // Only orders with a free machine and at least
+      // one assigned, idle operator are eligible
+      const eligibleWorkOrders = plannedWorkOrders.filter((workOrder: WorkOrder) => {
+        if (activeMachineIds.has(workOrder.machineId)) {
+          return false;
+        }
+
+        return (workOrder.machine.operators ?? []).some(
+          (operator: User) => !activeOperatorIds.has(operator.id),
+        );
+      });
+
+      if (eligibleWorkOrders.length === 0) {
+        return;
+      }
+
+      const selectedWorkOrder =
+        eligibleWorkOrders[Math.floor(Math.random() * eligibleWorkOrders.length)];
+
+      if (!selectedWorkOrder) {
+        return;
+      }
+
+      const availableOperators = (selectedWorkOrder.machine.operators ?? []).filter(
+        (operator: User) => !activeOperatorIds.has(operator.id),
+      );
+
+      const selectedOperator =
+        availableOperators[Math.floor(Math.random() * availableOperators.length)];
+
+      if (!selectedOperator) {
+        return;
+      }
+
+      const machines = await this.machineService.getAllMachines();
+
+      const selectedMachine = machines.find(
+        (machine) => machine.id === selectedWorkOrder.machineId,
+      );
+
+      if (!selectedMachine) {
+        return;
+      }
+
+      const currentStatus =
+        selectedMachine.statuses.find((status) => status.endedAt === null)?.status ??
+        MachineStatusType.IDLE;
+
+      // Production requires the machine to be running
+      if (currentStatus !== MachineStatusType.RUNNING) {
+        await this.machineStatusService.changeStatus({
+          machineId: selectedMachine.id,
+          status: MachineStatusType.RUNNING,
+          source: MachineActivitySource.DEMO_SIMULATION,
+          performedByUserId: selectedOperator.id,
+          performedByName: selectedOperator.name,
+          performedByRole: selectedOperator.role,
+        });
+      }
+
+      await this.workOrderService.startWorkOrder(selectedWorkOrder.id, selectedOperator.id);
+
+      console.log(
+        `Demo operator ${selectedOperator.name} started ${selectedWorkOrder.code} on ${selectedMachine.code}`,
+      );
+    } catch (error) {
+      console.error("Automatic operation assignment failed:", error);
+    } finally {
+      this.isOperationCycleRunning = false;
+    }
+  }
+
+  // Simulates an assigned operator changing
+  // one of their authorized machines
   private async runStatusCycle(): Promise<void> {
     if (this.isStatusCycleRunning) {
       return;
@@ -210,13 +380,22 @@ export class SimulationService {
     try {
       const machines = await this.machineService.getAllMachines();
 
-      if (machines.length === 0) {
+      const assignedMachines = machines.filter((machine) => (machine.operators ?? []).length > 0);
+
+      if (assignedMachines.length === 0) {
         return;
       }
 
-      const selectedMachine = machines[Math.floor(Math.random() * machines.length)];
+      const selectedMachine = assignedMachines[Math.floor(Math.random() * assignedMachines.length)];
 
       if (!selectedMachine) {
+        return;
+      }
+
+      const selectedOperator =
+        selectedMachine.operators[Math.floor(Math.random() * selectedMachine.operators.length)];
+
+      if (!selectedOperator) {
         return;
       }
 
@@ -238,9 +417,13 @@ export class SimulationService {
         machineId: selectedMachine.id,
         status: nextStatus,
         reason: nextStatus === MachineStatusType.DOWN ? "Automatic demo downtime" : undefined,
+        source: MachineActivitySource.DEMO_SIMULATION,
+        performedByUserId: selectedOperator.id,
+        performedByName: selectedOperator.name,
+        performedByRole: selectedOperator.role,
       });
     } catch (error) {
-      console.error("Automatic status generation failed:", error);
+      console.error("Automatic operator status generation failed:", error);
     } finally {
       this.isStatusCycleRunning = false;
     }
@@ -280,14 +463,12 @@ export class SimulationService {
     }
   }
 
-  // Creates a random decimal number with one decimal digit
   private randomValue(minimum: number, maximum: number): number {
     const value = minimum + Math.random() * (maximum - minimum);
 
     return Number(value.toFixed(1));
   }
 
-  // Creates a random integer including both limits
   private randomInteger(minimum: number, maximum: number): number {
     return Math.floor(Math.random() * (maximum - minimum + 1)) + minimum;
   }

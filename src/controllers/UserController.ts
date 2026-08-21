@@ -5,7 +5,24 @@ import { UserService } from "../services/UserService";
 
 const userService = new UserService();
 
-// Sends an appropriate HTTP response for user management errors
+interface AuthenticatedRequestUser {
+  id: number;
+  role: UserRole;
+}
+
+// Returns the authenticated administrator ID
+const getAuthenticatedUserId = (response: Response): number => {
+  const authUser = response.locals.authUser as AuthenticatedRequestUser | undefined;
+
+  if (!authUser || !Number.isInteger(authUser.id) || authUser.id <= 0) {
+    throw new AppError("Authentication is required", 401);
+  }
+
+  return authUser.id;
+};
+
+// Sends an appropriate HTTP response
+// for user management errors
 const handleError = (error: unknown, response: Response): void => {
   if (error instanceof AppError) {
     response.status(error.statusCode).json({
@@ -54,7 +71,7 @@ export const changeUserRole = async (request: Request, response: Response): Prom
       throw new AppError(`Role must be one of: ${allowedRoles.join(", ")}`, 400);
     }
 
-    const authenticatedUserId = Number(response.locals.authUser.id);
+    const authenticatedUserId = getAuthenticatedUserId(response);
 
     const updatedUser = await userService.updateUserRole(
       authenticatedUserId,
@@ -86,7 +103,13 @@ export const assignMachineToOperator = async (
       throw new AppError("Machine ID must be a positive integer", 400);
     }
 
-    const updatedUser = await userService.assignMachine(targetUserId, machineId);
+    const authenticatedUserId = getAuthenticatedUserId(response);
+
+    const updatedUser = await userService.assignMachine(
+      targetUserId,
+      machineId,
+      authenticatedUserId,
+    );
 
     response.status(200).json(updatedUser);
   } catch (error) {
@@ -112,7 +135,13 @@ export const removeMachineFromOperator = async (
       throw new AppError("Machine ID must be a positive integer", 400);
     }
 
-    const updatedUser = await userService.removeMachineAssignment(targetUserId, machineId);
+    const authenticatedUserId = getAuthenticatedUserId(response);
+
+    const updatedUser = await userService.removeMachineAssignment(
+      targetUserId,
+      machineId,
+      authenticatedUserId,
+    );
 
     response.status(200).json(updatedUser);
   } catch (error) {

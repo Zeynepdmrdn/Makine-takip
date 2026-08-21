@@ -1,6 +1,7 @@
 import { AppDataSource } from "../database/data-source";
 import { Machine } from "../entities/Machine";
 import { Product } from "../entities/Product";
+import { User, UserRole } from "../entities/User";
 import { WorkOrder, WorkOrderStatus } from "../entities/WorkOrder";
 import { AppError } from "../errors/AppError";
 
@@ -12,7 +13,7 @@ export interface CreateWorkOrderInput {
 }
 
 export class WorkOrderService {
-  // Creates a planned work order for an existing product and machine
+  // Creates a planned work order
   async createWorkOrder(input: CreateWorkOrderInput): Promise<WorkOrder> {
     const workOrderRepository = AppDataSource.getRepository(WorkOrder);
 
@@ -61,6 +62,8 @@ export class WorkOrderService {
       targetQuantity: input.targetQuantity,
       actualQuantity: 0,
       status: WorkOrderStatus.PLANNED,
+      startedByUserId: null,
+      responsibleOperatorId: null,
       startedAt: null,
       completedAt: null,
     });
@@ -70,14 +73,14 @@ export class WorkOrderService {
     return this.getWorkOrderById(savedWorkOrder.id);
   }
 
-  // Returns all work orders with their product and machine
+  // Returns all work orders with their related information
   async getAllWorkOrders(): Promise<WorkOrder[]> {
-    const workOrderRepository = AppDataSource.getRepository(WorkOrder);
-
-    return workOrderRepository.find({
+    return AppDataSource.getRepository(WorkOrder).find({
       relations: {
         product: true,
         machine: true,
+        startedByUser: true,
+        responsibleOperator: true,
       },
       order: {
         id: "DESC",
@@ -85,17 +88,17 @@ export class WorkOrderService {
     });
   }
 
-  // Returns one work order with its product and machine
+  // Returns one work order with live-operation information
   async getWorkOrderById(id: number): Promise<WorkOrder> {
-    const workOrderRepository = AppDataSource.getRepository(WorkOrder);
-
-    const workOrder = await workOrderRepository.findOne({
+    const workOrder = await AppDataSource.getRepository(WorkOrder).findOne({
       where: {
         id,
       },
       relations: {
         product: true,
         machine: true,
+        startedByUser: true,
+        responsibleOperator: true,
       },
     });
 
@@ -106,9 +109,18 @@ export class WorkOrderService {
     return workOrder;
   }
 
-  // Starts a planned work order
-  async startWorkOrder(id: number): Promise<WorkOrder> {
+  // Starts a work order while separating
+  // the initiating user from the responsible operator
+  async startWorkOrder(
+    id: number,
+    startedByUserId?: number,
+    responsibleOperatorId?: number,
+  ): Promise<WorkOrder> {
     const workOrderRepository = AppDataSource.getRepository(WorkOrder);
+
+    const userRepository = AppDataSource.getRepository(User);
+
+    const machineRepository = AppDataSource.getRepository(Machine);
 
     const workOrder = await this.getWorkOrderById(id);
 
@@ -116,17 +128,104 @@ export class WorkOrderService {
       throw new AppError("Only a planned work order can be started", 400);
     }
 
-    const activeWorkOrder = await workOrderRepository.findOneBy({
+    // One machine can have only one active work order
+    const machineActiveWorkOrder = await workOrderRepository.findOneBy({
       machineId: workOrder.machineId,
       status: WorkOrderStatus.IN_PROGRESS,
     });
 
-    if (activeWorkOrder) {
+    if (machineActiveWorkOrder) {
       throw new AppError("The machine already has an active work order", 409);
     }
 
+    /*
+     * Calls without user information are retained only
+     * for legacy service tests. Real API requests always
+     * provide the authenticated initiating user.
+     */
+    if (startedByUserId !== undefined) {
+      const initiatingUser = await userRepository.findOneBy({
+        id: startedByUserId,
+      });
+
+      if (!initiatingUser) {
+        throw new AppError("Initiating user not found", 404);
+      }
+
+      if (initiatingUser.role !== UserRole.ADMIN && initiatingUser.role !== UserRole.OPERATOR) {
+        throw new AppError("This user cannot start a work order", 403);
+      }
+
+      let normalizedResponsibleOperatorId = responsibleOperatorId;
+
+      // Operators automatically become responsible
+      // for work orders they start themselves
+      if (initiatingUser.role === UserRole.OPERATOR) {
+        if (responsibleOperatorId !== undefined && responsibleOperatorId !== initiatingUser.id) {
+          throw new AppError("Operators cannot start work for another operator", 403);
+        }
+
+        normalizedResponsibleOperatorId = initiatingUser.id;
+      }
+
+      // Administrators must explicitly select
+      // the operator who will physically run the machine
+      if (initiatingUser.role === UserRole.ADMIN && normalizedResponsibleOperatorId === undefined) {
+        throw new AppError("A responsible operator must be selected", 400);
+      }
+
+      const responsibleOperator = await userRepository.findOneBy({
+        id: normalizedResponsibleOperatorId,
+      });
+
+      if (!responsibleOperator) {
+        throw new AppError("Responsible operator not found", 404);
+      }
+
+      if (responsibleOperator.role !== UserRole.OPERATOR) {
+        throw new AppError("The responsible user must have the OPERATOR role", 400);
+      }
+
+      const machine = await machineRepository.findOne({
+        where: {
+          id: workOrder.machineId,
+        },
+        relations: {
+          operators: true,
+        },
+      });
+
+      if (!machine) {
+        throw new AppError("Machine not found", 404);
+      }
+
+      const isAssignedToMachine = machine.operators.some(
+        (operator: User) => operator.id === responsibleOperator.id,
+      );
+
+      if (!isAssignedToMachine) {
+        throw new AppError("The selected operator is not assigned to this machine", 403);
+      }
+
+      // One operator cannot run two active operations
+      const operatorActiveWorkOrder = await workOrderRepository.findOneBy({
+        responsibleOperatorId: responsibleOperator.id,
+        status: WorkOrderStatus.IN_PROGRESS,
+      });
+
+      if (operatorActiveWorkOrder) {
+        throw new AppError(`${responsibleOperator.name} already has an active work order`, 409);
+      }
+
+      workOrder.startedByUserId = initiatingUser.id;
+
+      workOrder.responsibleOperatorId = responsibleOperator.id;
+    }
+
     workOrder.status = WorkOrderStatus.IN_PROGRESS;
+
     workOrder.startedAt = new Date();
+    workOrder.completedAt = null;
 
     await workOrderRepository.save(workOrder);
 

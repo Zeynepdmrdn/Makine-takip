@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { MachineActivitySource } from "../entities/MachineActivity";
 import { MachineStatusType } from "../entities/MachineStatus";
 import { UserRole } from "../entities/User";
 import { AppError } from "../errors/AppError";
@@ -128,6 +129,9 @@ export const changeMachineStatus = async (request: Request, response: Response):
       machineId,
       status: body.status as MachineStatusType,
       reason: body.reason,
+      source: MachineActivitySource.USER,
+      performedByUserId: authUser.id,
+      performedByRole: authUser.role,
     });
 
     response.status(201).json(statusRecord);
@@ -136,7 +140,7 @@ export const changeMachineStatus = async (request: Request, response: Response):
   }
 };
 
-// Returns machine availability details for a given time range
+// Returns machine availability details for a time range
 export const getMachineAvailability = async (
   request: Request,
   response: Response,

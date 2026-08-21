@@ -7,6 +7,7 @@ import { ProductionRecord } from "../entities/ProductionRecord";
 import { SensorReading } from "../entities/SensorReading";
 import { User } from "../entities/User";
 import { WorkOrder } from "../entities/WorkOrder";
+import { MachineActivity } from "../entities/MachineActivity";
 
 // Configures the application's database connection
 export const AppDataSource = new DataSource({
@@ -14,5 +15,14 @@ export const AppDataSource = new DataSource({
   database: "database.sqlite",
   synchronize: true,
   logging: false,
-  entities: [Machine, MachineStatus, Product, ProductionRecord, SensorReading, User, WorkOrder],
+  entities: [
+    Machine,
+    MachineActivity,
+    MachineStatus,
+    Product,
+    ProductionRecord,
+    SensorReading,
+    User,
+    WorkOrder,
+  ],
 });

@@ -6,11 +6,14 @@ import { UserRole } from "./entities/User";
 import { requireAuth } from "./middleware/requireAuth";
 import { requireRole } from "./middleware/requireRole";
 import { authRouter } from "./routes/authRoutes";
+import { liveOperationsRouter } from "./routes/liveOperationsRoutes";
+import { machineActivityRouter } from "./routes/machineActivityRoutes";
 import { machineRouter } from "./routes/machineRoutes";
+import { productRouter } from "./routes/productRoutes";
 import { simulationRouter } from "./routes/simulationRoutes";
 import { userRouter } from "./routes/userRoutes";
-import { productRouter } from "./routes/productRoutes";
 import { workOrderRouter } from "./routes/workOrderRoutes";
+
 // Create an Express application
 const app = express();
 
@@ -29,10 +32,19 @@ app.use("/auth", authRouter);
 
 // Protected application routes
 app.use("/machines", requireAuth, machineRouter);
+
+app.use("/activities", requireAuth, machineActivityRouter);
+
+app.use("/live-operations", requireAuth, liveOperationsRouter);
+
 app.use("/products", requireAuth, productRouter);
+
 app.use("/work-orders", requireAuth, workOrderRouter);
+
 app.use("/simulation", requireAuth, simulationRouter);
-// Only administrators can list users and change roles
+
+// Only administrators can list users,
+// assign machines and change roles
 app.use("/users", requireAuth, requireRole(UserRole.ADMIN), userRouter);
 
 // Define the port where the server will run

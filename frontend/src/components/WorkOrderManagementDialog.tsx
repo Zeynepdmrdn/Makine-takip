@@ -29,24 +29,19 @@ export function WorkOrderManagementDialog({
   onClose,
 }: WorkOrderManagementDialogProps) {
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
-
   const [selectedWorkOrder, setSelectedWorkOrder] = useState<WorkOrder | null>(null);
-
   const [products, setProducts] = useState<Product[]>([]);
-
   const [machines, setMachines] = useState<Machine[]>([]);
-
   const [code, setCode] = useState("");
   const [productId, setProductId] = useState("");
   const [machineId, setMachineId] = useState("");
   const [targetQuantity, setTargetQuantity] = useState("");
-
+  const [selectedOperatorByWorkOrder, setSelectedOperatorByWorkOrder] = useState<
+    Record<number, string>
+  >({});
   const [isLoading, setIsLoading] = useState(true);
-
   const [isSubmitting, setIsSubmitting] = useState(false);
-
   const [updatingWorkOrderId, setUpdatingWorkOrderId] = useState<number | null>(null);
-
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const isAdmin = currentUserRole === "ADMIN";
@@ -80,10 +75,9 @@ export function WorkOrderManagementDialog({
         }
       } catch (error) {
         if (!isCancelled) {
-          const message =
-            error instanceof Error ? error.message : "Work order data could not be loaded.";
-
-          setErrorMessage(message);
+          setErrorMessage(
+            error instanceof Error ? error.message : "Work order data could not be loaded.",
+          );
         }
       } finally {
         if (!isCancelled) {
@@ -114,25 +108,21 @@ export function WorkOrderManagementDialog({
 
     if (code.trim() === "") {
       setErrorMessage("Work order code is required.");
-
       return;
     }
 
     if (!Number.isInteger(parsedProductId) || parsedProductId <= 0) {
       setErrorMessage("Please select a product.");
-
       return;
     }
 
     if (!Number.isInteger(parsedMachineId) || parsedMachineId <= 0) {
       setErrorMessage("Please select a machine.");
-
       return;
     }
 
     if (!Number.isInteger(parsedTargetQuantity) || parsedTargetQuantity <= 0) {
       setErrorMessage("Target quantity must be a positive integer.");
-
       return;
     }
 
@@ -141,9 +131,7 @@ export function WorkOrderManagementDialog({
 
       const response = await apiFetch("/work-orders", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           code: code.trim(),
           productId: parsedProductId,
@@ -155,23 +143,16 @@ export function WorkOrderManagementDialog({
       const data = (await response.json()) as WorkOrder | ErrorResponse;
 
       if (!response.ok) {
-        const errorData = data as ErrorResponse;
-
-        throw new Error(errorData.message ?? "Work order could not be created.");
+        throw new Error((data as ErrorResponse).message ?? "Work order could not be created.");
       }
 
-      const createdWorkOrder = data as WorkOrder;
-
-      setWorkOrders((currentWorkOrders) => [createdWorkOrder, ...currentWorkOrders]);
-
+      setWorkOrders((current) => [data as WorkOrder, ...current]);
       setCode("");
       setProductId("");
       setMachineId("");
       setTargetQuantity("");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Work order could not be created.";
-
-      setErrorMessage(message);
+      setErrorMessage(error instanceof Error ? error.message : "Work order could not be created.");
     } finally {
       setIsSubmitting(false);
     }
@@ -185,41 +166,60 @@ export function WorkOrderManagementDialog({
       setUpdatingWorkOrderId(workOrderId);
       setErrorMessage(null);
 
-      const response = await apiFetch(`/work-orders/${workOrderId}/${action}`, {
-        method: "POST",
-      });
+      let requestOptions: RequestInit = { method: "POST" };
 
+      if (action === "start" && isAdmin) {
+        const operatorId = Number(selectedOperatorByWorkOrder[workOrderId]);
+
+        if (!Number.isInteger(operatorId) || operatorId <= 0) {
+          throw new Error("Please select the responsible operator.");
+        }
+
+        requestOptions = {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ operatorId }),
+        };
+      }
+
+      const response = await apiFetch(`/work-orders/${workOrderId}/${action}`, requestOptions);
       const data = (await response.json()) as WorkOrder | ErrorResponse;
 
       if (!response.ok) {
-        const errorData = data as ErrorResponse;
-
-        throw new Error(errorData.message ?? "Work order could not be updated.");
+        throw new Error((data as ErrorResponse).message ?? "Work order could not be updated.");
       }
 
       const updatedWorkOrder = data as WorkOrder;
 
-      setWorkOrders((currentWorkOrders) =>
-        currentWorkOrders.map((workOrder) =>
+      setWorkOrders((current) =>
+        current.map((workOrder) =>
           workOrder.id === updatedWorkOrder.id ? updatedWorkOrder : workOrder,
         ),
       );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Work order could not be updated.";
 
-      setErrorMessage(message);
+      setSelectedOperatorByWorkOrder((current) => {
+        const next = { ...current };
+        delete next[workOrderId];
+        return next;
+      });
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Work order could not be updated.");
     } finally {
       setUpdatingWorkOrderId(null);
     }
   };
 
-  const calculateProgress = (workOrder: WorkOrder): number => {
-    if (workOrder.targetQuantity <= 0) {
-      return 0;
-    }
+  const activeOperatorIds = new Set(
+    workOrders
+      .filter((workOrder) => workOrder.status === "IN_PROGRESS")
+      .map((workOrder) => workOrder.responsibleOperatorId)
+      .filter((id): id is number => id !== null),
+  );
 
-    return Math.min(100, (workOrder.actualQuantity / workOrder.targetQuantity) * 100);
-  };
+  const calculateProgress = (workOrder: WorkOrder): number =>
+    workOrder.targetQuantity <= 0
+      ? 0
+      : Math.min(100, (workOrder.actualQuantity / workOrder.targetQuantity) * 100);
 
   return (
     <div
@@ -234,16 +234,13 @@ export function WorkOrderManagementDialog({
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-amber-600">
               Production Planning
             </p>
-
             <h2 id="work-order-management-title" className="mt-2 text-2xl font-bold text-slate-900">
               Work Orders
             </h2>
-
             <p className="mt-2 text-sm text-slate-500">
-              Plan products and target quantities for production machines.
+              Plan production and assign the operator physically responsible for each operation.
             </p>
           </div>
-
           <button
             type="button"
             onClick={onClose}
@@ -267,315 +264,239 @@ export function WorkOrderManagementDialog({
               onSubmit={handleCreateWorkOrder}
             >
               <h3 className="text-lg font-bold text-slate-900">Create Work Order</h3>
+              <p className="mt-1 text-sm text-slate-500">Only administrators can create plans.</p>
 
-              <p className="mt-1 text-sm text-slate-500">
-                Only administrators can create production plans.
-              </p>
+              <label className="mt-5 block text-sm font-semibold text-slate-700" htmlFor="wo-code">
+                Work order code
+              </label>
+              <input
+                id="wo-code"
+                value={code}
+                onChange={(event) => setCode(event.target.value)}
+                disabled={isSubmitting}
+                placeholder="Example: WO-2026-001"
+                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-amber-500"
+              />
 
-              <div className="mt-5">
-                <label
-                  htmlFor="work-order-code"
-                  className="block text-sm font-semibold text-slate-700"
-                >
-                  Work order code
-                </label>
+              <label
+                className="mt-4 block text-sm font-semibold text-slate-700"
+                htmlFor="wo-product"
+              >
+                Product
+              </label>
+              <select
+                id="wo-product"
+                value={productId}
+                onChange={(event) => setProductId(event.target.value)}
+                disabled={isSubmitting}
+                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3"
+              >
+                <option value="">Select a product</option>
+                {products.map((product) => (
+                  <option key={product.id} value={product.id}>
+                    {product.code} - {product.name}
+                  </option>
+                ))}
+              </select>
 
-                <input
-                  id="work-order-code"
-                  type="text"
-                  value={code}
-                  onChange={(event) => setCode(event.target.value)}
-                  disabled={isSubmitting}
-                  placeholder="Example: WO-2026-001"
-                  className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-amber-500 focus:ring-4 focus:ring-amber-100"
-                />
-              </div>
+              <label
+                className="mt-4 block text-sm font-semibold text-slate-700"
+                htmlFor="wo-machine"
+              >
+                Machine
+              </label>
+              <select
+                id="wo-machine"
+                value={machineId}
+                onChange={(event) => setMachineId(event.target.value)}
+                disabled={isSubmitting}
+                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3"
+              >
+                <option value="">Select a machine</option>
+                {machines.map((machine) => (
+                  <option key={machine.id} value={machine.id}>
+                    {machine.code} - {machine.name}
+                  </option>
+                ))}
+              </select>
 
-              <div className="mt-4">
-                <label
-                  htmlFor="work-order-product"
-                  className="block text-sm font-semibold text-slate-700"
-                >
-                  Product
-                </label>
-
-                <select
-                  id="work-order-product"
-                  value={productId}
-                  onChange={(event) => setProductId(event.target.value)}
-                  disabled={isSubmitting}
-                  className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-amber-500"
-                >
-                  <option value="">Select a product</option>
-
-                  {products.map((product) => (
-                    <option key={product.id} value={product.id}>
-                      {product.code} - {product.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="mt-4">
-                <label
-                  htmlFor="work-order-machine"
-                  className="block text-sm font-semibold text-slate-700"
-                >
-                  Machine
-                </label>
-
-                <select
-                  id="work-order-machine"
-                  value={machineId}
-                  onChange={(event) => setMachineId(event.target.value)}
-                  disabled={isSubmitting}
-                  className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-amber-500"
-                >
-                  <option value="">Select a machine</option>
-
-                  {machines.map((machine) => (
-                    <option key={machine.id} value={machine.id}>
-                      {machine.code} - {machine.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="mt-4">
-                <label
-                  htmlFor="work-order-target"
-                  className="block text-sm font-semibold text-slate-700"
-                >
-                  Target quantity
-                </label>
-
-                <input
-                  id="work-order-target"
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={targetQuantity}
-                  onChange={(event) => setTargetQuantity(event.target.value)}
-                  disabled={isSubmitting}
-                  placeholder="Example: 1000"
-                  className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-amber-500 focus:ring-4 focus:ring-amber-100"
-                />
-              </div>
+              <label
+                className="mt-4 block text-sm font-semibold text-slate-700"
+                htmlFor="wo-target"
+              >
+                Target quantity
+              </label>
+              <input
+                id="wo-target"
+                type="number"
+                min="1"
+                step="1"
+                value={targetQuantity}
+                onChange={(event) => setTargetQuantity(event.target.value)}
+                disabled={isSubmitting}
+                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3"
+              />
 
               <button
                 type="submit"
                 disabled={isSubmitting || products.length === 0 || machines.length === 0}
-                className="mt-5 w-full rounded-xl bg-amber-500 px-5 py-3 font-semibold text-white shadow-sm transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-60"
+                className="mt-5 w-full rounded-xl bg-amber-500 px-5 py-3 font-semibold text-white hover:bg-amber-600 disabled:opacity-60"
               >
                 {isSubmitting ? "Creating..." : "Create Work Order"}
               </button>
-
-              {(products.length === 0 || machines.length === 0) && (
-                <p className="mt-3 text-xs text-amber-700">
-                  At least one product and one machine are required.
-                </p>
-              )}
             </form>
           )}
 
           <section>
-            <div>
-              <h3 className="text-lg font-bold text-slate-900">Production Orders</h3>
+            <h3 className="text-lg font-bold text-slate-900">Production Orders</h3>
+            <p className="mt-1 text-sm text-slate-500">{workOrders.length} work orders</p>
 
-              <p className="mt-1 text-sm text-slate-500">
-                {workOrders.length} work order
-                {workOrders.length === 1 ? "" : "s"}
-              </p>
-            </div>
-
-            {currentUserRole === "OPERATOR" && (
-              <div className="mt-5 rounded-2xl border border-blue-200 bg-blue-50 p-4">
-                <p className="text-sm font-semibold text-blue-800">Operator permissions</p>
-
-                <p className="mt-1 text-sm text-blue-700">
-                  You can view every work order, but you can only start and complete work orders
-                  belonging to machines assigned to you.
-                </p>
-              </div>
-            )}
-
-            {currentUserRole === "VIEWER" && (
-              <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-semibold text-slate-700">Read-only access</p>
-
-                <p className="mt-1 text-sm text-slate-600">
-                  You can inspect work orders and production analytics, but you cannot change
-                  production operations.
-                </p>
-              </div>
-            )}
-
-            {isLoading && (
-              <p className="mt-5 rounded-xl bg-slate-50 p-5 text-slate-600">
-                Loading work orders...
-              </p>
-            )}
-
+            {isLoading && <p className="mt-5 rounded-xl bg-slate-50 p-5">Loading...</p>}
             {!isLoading && workOrders.length === 0 && (
-              <p className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-slate-500">
+              <p className="mt-5 rounded-xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
                 No work orders have been created yet.
               </p>
             )}
 
-            {!isLoading && workOrders.length > 0 && (
-              <div className="mt-5 grid gap-4">
-                {workOrders.map((workOrder) => {
-                  const progress = calculateProgress(workOrder);
+            <div className="mt-5 grid gap-4">
+              {workOrders.map((workOrder) => {
+                const progress = calculateProgress(workOrder);
+                const targetReached = workOrder.actualQuantity >= workOrder.targetQuantity;
+                const relatedMachine = machines.find(
+                  (machine) => machine.id === workOrder.machineId,
+                );
+                const assignedOperators = relatedMachine?.operators ?? [];
+                const isAssignedToCurrentUser = assignedOperators.some(
+                  (operator) => operator.id === currentUserId,
+                );
+                const canStart =
+                  isAdmin || (currentUserRole === "OPERATOR" && isAssignedToCurrentUser);
+                const canComplete =
+                  isAdmin ||
+                  (currentUserRole === "OPERATOR" &&
+                    workOrder.responsibleOperatorId === currentUserId);
+                const selectedOperatorId = selectedOperatorByWorkOrder[workOrder.id] ?? "";
 
-                  const targetReached = workOrder.actualQuantity >= workOrder.targetQuantity;
-
-                  const relatedMachine = machines.find(
-                    (machine) => machine.id === workOrder.machineId,
-                  );
-
-                  const isAssignedToCurrentUser =
-                    relatedMachine?.operators.some((operator) => operator.id === currentUserId) ??
-                    false;
-
-                  const canOperateWorkOrder =
-                    isAdmin || (currentUserRole === "OPERATOR" && isAssignedToCurrentUser);
-
-                  return (
-                    <article
-                      key={workOrder.id}
-                      className={`rounded-2xl border p-5 shadow-sm transition ${
-                        isAssignedToCurrentUser && currentUserRole === "OPERATOR"
-                          ? "border-blue-300 bg-gradient-to-br from-white to-blue-50 ring-1 ring-blue-200"
-                          : "border-slate-200 bg-white"
-                      }`}
-                    >
-                      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-3">
-                            <h4 className="text-lg font-bold text-slate-900">{workOrder.code}</h4>
-
-                            <span
-                              className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                                statusStyles[workOrder.status]
-                              }`}
-                            >
-                              {workOrder.status}
-                            </span>
-
-                            {currentUserRole === "OPERATOR" && isAssignedToCurrentUser && (
-                              <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-blue-700">
-                                Assigned to you
-                              </span>
-                            )}
-
-                            {currentUserRole === "OPERATOR" && !isAssignedToCurrentUser && (
-                              <span className="rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-slate-500">
-                                View only
-                              </span>
-                            )}
-                          </div>
-
-                          <p className="mt-2 text-sm font-semibold text-slate-700">
-                            {workOrder.product.code} - {workOrder.product.name}
-                          </p>
-
-                          <p className="mt-1 text-sm text-slate-500">
-                            {workOrder.machine.code} - {workOrder.machine.name}
-                          </p>
-
-                          {relatedMachine && relatedMachine.operators.length > 0 && (
-                            <p className="mt-2 text-xs text-slate-500">
-                              Assigned operators:{" "}
-                              {relatedMachine.operators.map((operator) => operator.name).join(", ")}
-                            </p>
-                          )}
-                        </div>
-
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedWorkOrder(workOrder)}
-                            className="rounded-xl border border-indigo-300 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-100"
+                return (
+                  <article
+                    key={workOrder.id}
+                    className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+                  >
+                    <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-start">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <h4 className="text-lg font-bold text-slate-900">{workOrder.code}</h4>
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs font-semibold ${statusStyles[workOrder.status]}`}
                           >
-                            Production Analytics
-                          </button>
-
-                          {canOperateWorkOrder && workOrder.status === "PLANNED" && (
-                            <button
-                              type="button"
-                              disabled={updatingWorkOrderId === workOrder.id}
-                              onClick={() => void changeWorkOrderState(workOrder.id, "start")}
-                              className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                              {updatingWorkOrderId === workOrder.id
-                                ? "Starting..."
-                                : "Start Work Order"}
-                            </button>
-                          )}
-
-                          {canOperateWorkOrder &&
-                            workOrder.status === "IN_PROGRESS" &&
-                            targetReached && (
-                              <button
-                                type="button"
-                                disabled={updatingWorkOrderId === workOrder.id}
-                                onClick={() => void changeWorkOrderState(workOrder.id, "complete")}
-                                className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
-                              >
-                                {updatingWorkOrderId === workOrder.id
-                                  ? "Completing..."
-                                  : "Complete Work Order"}
-                              </button>
-                            )}
-                        </div>
-                      </div>
-
-                      <div className="mt-5">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="font-medium text-slate-600">Production progress</span>
-
-                          <span className="font-bold text-slate-900">
-                            {workOrder.actualQuantity} / {workOrder.targetQuantity}
+                            {workOrder.status}
                           </span>
                         </div>
-
-                        <div className="mt-2 h-3 overflow-hidden rounded-full bg-slate-100">
-                          <div
-                            className={`h-full rounded-full transition-all duration-500 ${
-                              targetReached ? "bg-green-500" : "bg-blue-500"
-                            }`}
-                            style={{
-                              width: `${progress}%`,
-                            }}
-                          />
-                        </div>
-
-                        <p className="mt-2 text-right text-xs font-semibold text-slate-500">
-                          {progress.toFixed(1)}%
+                        <p className="mt-2 text-sm font-semibold text-slate-700">
+                          {workOrder.product.code} - {workOrder.product.name}
                         </p>
+                        <p className="mt-1 text-sm text-slate-500">
+                          {workOrder.machine.code} - {workOrder.machine.name}
+                        </p>
+
+                        {workOrder.responsibleOperator && (
+                          <div className="mt-3 rounded-xl border border-green-200 bg-green-50 p-3 text-sm">
+                            <p className="font-bold text-green-800">
+                              Responsible: {workOrder.responsibleOperator.name}
+                            </p>
+                            <p className="mt-1 text-xs text-green-700">
+                              Started in system by {workOrder.startedByUser?.name ?? "Unknown user"}
+                            </p>
+                          </div>
+                        )}
                       </div>
 
-                      {workOrder.status === "IN_PROGRESS" &&
-                        targetReached &&
-                        canOperateWorkOrder && (
-                          <p className="mt-4 rounded-xl border border-green-200 bg-green-50 p-3 text-sm font-semibold text-green-700">
-                            Target reached. This work order can now be completed.
-                          </p>
+                      <div className="flex min-w-64 flex-col gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedWorkOrder(workOrder)}
+                          className="rounded-xl border border-indigo-300 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700"
+                        >
+                          Production Analytics
+                        </button>
+
+                        {isAdmin && workOrder.status === "PLANNED" && (
+                          <select
+                            value={selectedOperatorId}
+                            onChange={(event) =>
+                              setSelectedOperatorByWorkOrder((current) => ({
+                                ...current,
+                                [workOrder.id]: event.target.value,
+                              }))
+                            }
+                            className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+                          >
+                            <option value="">Select responsible operator</option>
+                            {assignedOperators.map((operator) => (
+                              <option
+                                key={operator.id}
+                                value={operator.id}
+                                disabled={activeOperatorIds.has(operator.id)}
+                              >
+                                {operator.name}
+                                {activeOperatorIds.has(operator.id) ? " - Busy" : ""}
+                              </option>
+                            ))}
+                          </select>
                         )}
 
-                      {workOrder.status === "IN_PROGRESS" &&
-                        targetReached &&
-                        !canOperateWorkOrder && (
-                          <p className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
-                            Target reached. An authorized operator or administrator can complete
-                            this work order.
-                          </p>
+                        {canStart && workOrder.status === "PLANNED" && (
+                          <button
+                            type="button"
+                            disabled={
+                              updatingWorkOrderId === workOrder.id ||
+                              (isAdmin && selectedOperatorId === "")
+                            }
+                            onClick={() => void changeWorkOrderState(workOrder.id, "start")}
+                            className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                          >
+                            {updatingWorkOrderId === workOrder.id
+                              ? "Starting..."
+                              : currentUserRole === "OPERATOR"
+                                ? "Start as Myself"
+                                : "Start Work Order"}
+                          </button>
                         )}
-                    </article>
-                  );
-                })}
-              </div>
-            )}
+
+                        {canComplete && workOrder.status === "IN_PROGRESS" && targetReached && (
+                          <button
+                            type="button"
+                            disabled={updatingWorkOrderId === workOrder.id}
+                            onClick={() => void changeWorkOrderState(workOrder.id, "complete")}
+                            className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                          >
+                            Complete Work Order
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-5">
+                      <div className="flex justify-between text-sm">
+                        <span className="font-medium text-slate-600">Production progress</span>
+                        <span className="font-bold text-slate-900">
+                          {workOrder.actualQuantity} / {workOrder.targetQuantity}
+                        </span>
+                      </div>
+                      <div className="mt-2 h-3 overflow-hidden rounded-full bg-slate-100">
+                        <div
+                          className={`h-full rounded-full ${targetReached ? "bg-green-500" : "bg-blue-500"}`}
+                          style={{ width: `${progress}%` }}
+                        />
+                      </div>
+                      <p className="mt-2 text-right text-xs font-semibold text-slate-500">
+                        {progress.toFixed(1)}%
+                      </p>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
           </section>
         </div>
 
@@ -583,7 +504,7 @@ export function WorkOrderManagementDialog({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+            className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white"
           >
             Done
           </button>

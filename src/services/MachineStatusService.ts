@@ -1,18 +1,33 @@
 import { IsNull } from "typeorm";
 import { AppDataSource } from "../database/data-source";
+import { MachineActivitySource, MachineActivityType } from "../entities/MachineActivity";
 import { Machine } from "../entities/Machine";
 import { MachineStatus, MachineStatusType } from "../entities/MachineStatus";
+import { UserRole } from "../entities/User";
 import { AppError } from "../errors/AppError";
 import { AvailabilityDetails, calculateAvailabilityDetails } from "../utils/calculateAvailability";
+import { MachineActivityService } from "./MachineActivityService";
 
 export interface ChangeMachineStatusInput {
   machineId: number;
   status: MachineStatusType;
   reason?: string;
+  source?: MachineActivitySource;
+  performedByUserId?: number | null;
+  performedByName?: string | null;
+  performedByRole?: UserRole | null;
+}
+
+interface StatusChangeResult {
+  statusRecord: MachineStatus;
+  previousStatus: MachineStatusType | null;
 }
 
 export class MachineStatusService {
-  // Closes the current status and starts a new one
+  private readonly machineActivityService = new MachineActivityService();
+
+  // Closes the current status, starts a new one
+  // and records who performed the action
   async changeStatus(input: ChangeMachineStatusInput): Promise<MachineStatus> {
     const machineRepository = AppDataSource.getRepository(Machine);
 
@@ -30,7 +45,7 @@ export class MachineStatusService {
       throw new AppError("A reason is required when the machine is DOWN", 400);
     }
 
-    return AppDataSource.transaction(async (manager) => {
+    const result = await AppDataSource.transaction<StatusChangeResult>(async (manager) => {
       const statusRepository = manager.getRepository(MachineStatus);
 
       const currentStatus = await statusRepository.findOne({
@@ -55,6 +70,7 @@ export class MachineStatusService {
 
       if (currentStatus) {
         currentStatus.endedAt = newStartedAt;
+
         await statusRepository.save(currentStatus);
       }
 
@@ -66,8 +82,30 @@ export class MachineStatusService {
         endedAt: null,
       });
 
-      return statusRepository.save(newStatus);
+      const savedStatus = await statusRepository.save(newStatus);
+
+      return {
+        statusRecord: savedStatus,
+        previousStatus: currentStatus?.status ?? null,
+      };
     });
+
+    const source = input.source ?? MachineActivitySource.SYSTEM;
+
+    await this.machineActivityService.createActivity({
+      machineId: input.machineId,
+      activityType: MachineActivityType.STATUS_CHANGED,
+      source,
+      previousStatus: result.previousStatus,
+      newStatus: input.status,
+      reason: normalizedReason,
+      performedByUserId: input.performedByUserId ?? null,
+      performedByName:
+        input.performedByName ?? (source === MachineActivitySource.SYSTEM ? "System" : null),
+      performedByRole: input.performedByRole ?? null,
+    });
+
+    return result.statusRecord;
   }
 
   // Calculates detailed availability data for a machine
@@ -77,6 +115,7 @@ export class MachineStatusService {
     }
 
     const machineRepository = AppDataSource.getRepository(Machine);
+
     const statusRepository = AppDataSource.getRepository(MachineStatus);
 
     const machine = await machineRepository.findOneBy({

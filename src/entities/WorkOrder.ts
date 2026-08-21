@@ -10,6 +10,7 @@ import {
 import { Machine } from "./Machine";
 import { Product } from "./Product";
 import { ProductionRecord } from "./ProductionRecord";
+import { User } from "./User";
 
 export enum WorkOrderStatus {
   PLANNED = "PLANNED",
@@ -18,7 +19,7 @@ export enum WorkOrderStatus {
   CANCELLED = "CANCELLED",
 }
 
-// Represents a production order assigned to one product and one machine
+// Represents a production order assigned to a product and machine
 @Entity()
 export class WorkOrder {
   @PrimaryGeneratedColumn()
@@ -75,6 +76,38 @@ export class WorkOrder {
   })
   status!: WorkOrderStatus;
 
+  // User who clicked the start operation
+  @Column({
+    type: "integer",
+    nullable: true,
+  })
+  startedByUserId!: number | null;
+
+  @ManyToOne(() => User, {
+    nullable: true,
+    onDelete: "SET NULL",
+  })
+  @JoinColumn({
+    name: "startedByUserId",
+  })
+  startedByUser!: User | null;
+
+  // Operator physically responsible for the machine operation
+  @Column({
+    type: "integer",
+    nullable: true,
+  })
+  responsibleOperatorId!: number | null;
+
+  @ManyToOne(() => User, {
+    nullable: true,
+    onDelete: "SET NULL",
+  })
+  @JoinColumn({
+    name: "responsibleOperatorId",
+  })
+  responsibleOperator!: User | null;
+
   @Column({
     type: "datetime",
     nullable: true,
@@ -92,7 +125,6 @@ export class WorkOrder {
   })
   createdAt!: Date;
 
-  // Production quantities recorded while this work order is active
   @OneToMany(() => ProductionRecord, (productionRecord) => productionRecord.workOrder)
   productionRecords!: ProductionRecord[];
 }

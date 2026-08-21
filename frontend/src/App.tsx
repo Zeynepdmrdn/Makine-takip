@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useState } from "react";
 import { AddMachineDialog } from "./components/AddMachineDialog";
 import { AuthPage } from "./components/AuthPage";
+import { LiveOperationsPanel } from "./components/LiveOperationsPanel";
 import { MachineCard } from "./components/MachineCard";
 import { ProductManagementDialog } from "./components/ProductManagementDialog";
 import { SimulationControls } from "./components/SimulationControls";
 import { UserManagementDialog } from "./components/UserManagementDialog";
 import { WorkOrderManagementDialog } from "./components/WorkOrderManagementDialog";
-import { apiFetch } from "./config/api";
 import { WorkOrderTargetNotifications } from "./components/WorkOrderTargetNotifications";
+import { apiFetch } from "./config/api";
 import { clearAuthentication, getStoredUser, saveAuthenticatedUser } from "./config/auth";
+import { useLiveOperations } from "./hooks/useLiveOperations";
+import { useMachineActivities } from "./hooks/useMachineActivities";
 import type { AuthenticatedUser } from "./types/auth";
 import type { Machine } from "./types/machine";
 
@@ -26,6 +29,14 @@ function App() {
   const [authenticatedUser, setAuthenticatedUser] = useState<AuthenticatedUser | null>(() =>
     getStoredUser(),
   );
+
+  const {
+    overview: liveOperationsOverview,
+    isLoading: isLiveOperationsLoading,
+    errorMessage: liveOperationsErrorMessage,
+  } = useLiveOperations(authenticatedUser !== null);
+
+  const { activities } = useMachineActivities(authenticatedUser !== null);
 
   const [machines, setMachines] = useState<Machine[]>([]);
 
@@ -56,6 +67,7 @@ function App() {
     }
   }, []);
 
+  // Loads machines when the authenticated user opens the dashboard
   useEffect(() => {
     if (!authenticatedUserId) {
       return;
@@ -88,6 +100,7 @@ function App() {
     };
   }, [authenticatedUserId]);
 
+  // Refreshes the current user's role and database information
   useEffect(() => {
     if (!authenticatedUserId) {
       return;
@@ -124,11 +137,11 @@ function App() {
 
     return () => {
       isCancelled = true;
-
       window.clearInterval(userRefreshTimer);
     };
   }, [authenticatedUserId]);
 
+  // Refreshes machine cards for live status changes
   useEffect(() => {
     if (!authenticatedUserId) {
       return;
@@ -258,6 +271,12 @@ function App() {
 
         <SimulationControls canManage={isAdmin} />
 
+        <LiveOperationsPanel
+          overview={liveOperationsOverview}
+          isLoading={isLiveOperationsLoading}
+          errorMessage={liveOperationsErrorMessage}
+        />
+
         {isLoading && (
           <p className="rounded-xl bg-white p-6 text-slate-600 shadow-sm">Loading machines...</p>
         )}
@@ -319,6 +338,12 @@ function App() {
                       machine={machine}
                       canChangeStatus={true}
                       isAssignedToCurrentUser={true}
+                      activeOperation={liveOperationsOverview?.activeOperations.find(
+                        (operation) => operation.machine.id === machine.id,
+                      )}
+                      latestActivity={activities.find(
+                        (activity) => activity.machineId === machine.id,
+                      )}
                       onStatusChanged={loadMachines}
                     />
                   ))}
@@ -357,6 +382,12 @@ function App() {
                       key={machine.id}
                       machine={machine}
                       canChangeStatus={false}
+                      activeOperation={liveOperationsOverview?.activeOperations.find(
+                        (operation) => operation.machine.id === machine.id,
+                      )}
+                      latestActivity={activities.find(
+                        (activity) => activity.machineId === machine.id,
+                      )}
                       onStatusChanged={loadMachines}
                     />
                   ))}
@@ -394,6 +425,10 @@ function App() {
                   key={machine.id}
                   machine={machine}
                   canChangeStatus={isAdmin}
+                  activeOperation={liveOperationsOverview?.activeOperations.find(
+                    (operation) => operation.machine.id === machine.id,
+                  )}
+                  latestActivity={activities.find((activity) => activity.machineId === machine.id)}
                   onStatusChanged={loadMachines}
                 />
               ))}

@@ -69,18 +69,21 @@ export class MachineService {
       const savedStatus = await statusRepository.save(initialStatus);
 
       savedMachine.statuses = [savedStatus];
+      savedMachine.operators = [];
 
       return savedMachine;
     });
   }
 
-  // Returns all machines for internal services and simulation
+  // Returns all machines for internal services
+  // and simulation, including assigned operators
   async getAllMachines(): Promise<Machine[]> {
     const machineRepository = AppDataSource.getRepository(Machine);
 
     return machineRepository.find({
       relations: {
         statuses: true,
+        operators: true,
       },
       order: {
         id: "ASC",
@@ -102,7 +105,7 @@ export class MachineService {
       },
     });
 
-    return machines.map((machine) => this.toMachineOverview(machine));
+    return machines.map((machine: Machine) => this.toMachineOverview(machine));
   }
 
   // Returns one machine for internal service usage
@@ -116,6 +119,7 @@ export class MachineService {
       relations: {
         statuses: true,
         sensorReadings: true,
+        operators: true,
       },
     });
 
@@ -147,11 +151,12 @@ export class MachineService {
 
     return {
       ...this.toMachineOverview(machine),
-      sensorReadings: machine.sensorReadings,
+      sensorReadings: machine.sensorReadings ?? [],
     };
   }
 
-  // Ensures the current user is allowed to operate one machine
+  // Ensures the current user is allowed
+  // to operate one machine
   async assertCanManageMachine(userId: number, role: UserRole, machineId: number): Promise<void> {
     const machineRepository = AppDataSource.getRepository(Machine);
 
@@ -186,22 +191,25 @@ export class MachineService {
       throw new AppError("User not found", 404);
     }
 
-    const isAssigned = operator.assignedMachines.some((machine) => machine.id === machineId);
+    const isAssigned = operator.assignedMachines.some(
+      (machine: Machine) => machine.id === machineId,
+    );
 
     if (!isAssigned) {
       throw new AppError("You are not assigned to this machine", 403);
     }
   }
 
-  // Removes password information before a machine is sent to clients
+  // Removes password information before
+  // a machine is sent to clients
   private toMachineOverview(machine: Machine): MachineOverview {
     return {
       id: machine.id,
       name: machine.name,
       code: machine.code,
       createdAt: machine.createdAt,
-      statuses: machine.statuses,
-      operators: (machine.operators ?? []).map((operator) => ({
+      statuses: machine.statuses ?? [],
+      operators: (machine.operators ?? []).map((operator: User) => ({
         id: operator.id,
         name: operator.name,
         email: operator.email,

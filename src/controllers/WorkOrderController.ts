@@ -13,7 +13,6 @@ interface AuthenticatedRequestUser {
   role: UserRole;
 }
 
-// Sends an appropriate HTTP response for work order errors
 const handleError = (error: unknown, response: Response): void => {
   if (error instanceof AppError) {
     response.status(error.statusCode).json({
@@ -103,7 +102,7 @@ export const getWorkOrderById = async (request: Request, response: Response): Pr
   }
 };
 
-// Starts one planned work order
+// Starts a planned work order
 export const startWorkOrder = async (request: Request, response: Response): Promise<void> => {
   try {
     const workOrderId = Number(request.params.id);
@@ -114,11 +113,46 @@ export const startWorkOrder = async (request: Request, response: Response): Prom
 
     const authUser = getAuthenticatedUser(response);
 
+    const body = request.body as
+      | {
+          operatorId?: unknown;
+        }
+      | undefined;
+
+    let responsibleOperatorId: number;
+
+    if (authUser.role === UserRole.ADMIN) {
+      if (
+        !body ||
+        typeof body.operatorId !== "number" ||
+        !Number.isInteger(body.operatorId) ||
+        body.operatorId <= 0
+      ) {
+        throw new AppError("An administrator must select a responsible operator", 400);
+      }
+
+      responsibleOperatorId = body.operatorId;
+    } else if (authUser.role === UserRole.OPERATOR) {
+      if (body?.operatorId !== undefined && body.operatorId !== authUser.id) {
+        throw new AppError("Operators cannot start work for another operator", 403);
+      }
+
+      responsibleOperatorId = authUser.id;
+    } else {
+      throw new AppError("You do not have permission to start a work order", 403);
+    }
+
     const workOrder = await workOrderService.getWorkOrderById(workOrderId);
 
+    // An operator can only start work on an assigned machine.
+    // Administrators are allowed to initiate every work order.
     await machineService.assertCanManageMachine(authUser.id, authUser.role, workOrder.machineId);
 
-    const startedWorkOrder = await workOrderService.startWorkOrder(workOrderId);
+    const startedWorkOrder = await workOrderService.startWorkOrder(
+      workOrderId,
+      authUser.id,
+      responsibleOperatorId,
+    );
 
     response.status(200).json(startedWorkOrder);
   } catch (error) {
@@ -126,7 +160,7 @@ export const startWorkOrder = async (request: Request, response: Response): Prom
   }
 };
 
-// Completes an active work order after its target is reached
+// Completes an active work order
 export const completeWorkOrder = async (request: Request, response: Response): Promise<void> => {
   try {
     const workOrderId = Number(request.params.id);
@@ -140,6 +174,12 @@ export const completeWorkOrder = async (request: Request, response: Response): P
     const workOrder = await workOrderService.getWorkOrderById(workOrderId);
 
     await machineService.assertCanManageMachine(authUser.id, authUser.role, workOrder.machineId);
+
+    // Operators can complete only operations
+    // for which they are physically responsible
+    if (authUser.role === UserRole.OPERATOR && workOrder.responsibleOperatorId !== authUser.id) {
+      throw new AppError("Only the responsible operator can complete this work order", 403);
+    }
 
     const completedWorkOrder = await workOrderService.completeWorkOrder(workOrderId);
 
