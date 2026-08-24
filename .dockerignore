@@ -1,0 +1,9 @@
+node_modules
+dist
+frontend
+database.sqlite
+coverage
+.git
+.gitignore
+.env
+*.log

@@ -1,24 +1,65 @@
 import "reflect-metadata";
+import { hash } from "bcryptjs";
 import { AppDataSource } from "../database/data-source";
 import { Machine } from "../entities/Machine";
 import { MachineStatus, MachineStatusType } from "../entities/MachineStatus";
 import { SensorReading } from "../entities/SensorReading";
+import { User, UserRole } from "../entities/User";
 
-// Inserts sample development data into the database
+// Inserts an administrator and sample development data
 const seedDatabase = async (): Promise<void> => {
   try {
     await AppDataSource.initialize();
     console.log("Database connected for seeding");
 
+    const userRepository = AppDataSource.getRepository(User);
     const machineRepository = AppDataSource.getRepository(Machine);
     const statusRepository = AppDataSource.getRepository(MachineStatus);
     const readingRepository = AppDataSource.getRepository(SensorReading);
 
-    // Prevent duplicate data when the seed command is run again
+    const adminName = process.env.SEED_ADMIN_NAME?.trim();
+    const adminEmail = process.env.SEED_ADMIN_EMAIL?.trim().toLowerCase();
+    const adminPassword = process.env.SEED_ADMIN_PASSWORD;
+
+    if (adminName && adminEmail && adminPassword) {
+      const existingAdmin = await userRepository.findOneBy({
+        email: adminEmail,
+      });
+
+      if (existingAdmin) {
+        if (existingAdmin.role !== UserRole.ADMIN) {
+          existingAdmin.role = UserRole.ADMIN;
+          await userRepository.save(existingAdmin);
+
+          console.log(`Existing user promoted to ADMIN: ${adminEmail}`);
+        } else {
+          console.log(`Admin already exists: ${adminEmail}`);
+        }
+      } else {
+        const passwordHash = await hash(adminPassword, 12);
+
+        const admin = userRepository.create({
+          name: adminName,
+          email: adminEmail,
+          passwordHash,
+          role: UserRole.ADMIN,
+        });
+
+        await userRepository.save(admin);
+
+        console.log(`Admin created: ${adminEmail}`);
+      }
+    } else {
+      console.log(
+        "Admin seed skipped: SEED_ADMIN_NAME, SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD are required",
+      );
+    }
+
+    // Prevent duplicate machine data when the seed command is run again
     const machineCount = await machineRepository.count();
 
     if (machineCount > 0) {
-      console.log("Seed skipped: machines already exist");
+      console.log("Machine seed skipped: machines already exist");
       return;
     }
 
@@ -117,7 +158,7 @@ const seedDatabase = async (): Promise<void> => {
 
     await readingRepository.save(readings);
 
-    console.log("Seed completed successfully");
+    console.log("Machine seed completed successfully");
     console.log(`Machines inserted: ${savedMachines.length}`);
     console.log(`Statuses inserted: ${statuses.length}`);
     console.log(`Sensor readings inserted: ${readings.length}`);

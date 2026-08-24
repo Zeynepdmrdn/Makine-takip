@@ -4,4 +4,3 @@ dist/
 *.db
 *.sqlite
 *.log
-.env
