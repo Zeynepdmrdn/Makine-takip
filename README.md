@@ -1,155 +1,78 @@
-<div align="center">
-
 # MakineTakip
 
-### Secure, real-time machine monitoring for a mini MES environment
+MakineTakip is a small Manufacturing Execution System (MES) project that I developed during my internship. The project started with basic machine and sensor tracking. I later added production planning, user roles, operator assignments and live operation monitoring.
 
-Monitor machine states, availability, downtime and live sensor data from one responsive dashboard.
+The main purpose is to see the current situation in the factory from a single screen: which machines are running, which work orders are active, who is responsible for them and how production is progressing.
 
-[![TypeScript](https://img.shields.io/badge/TypeScript-6.0-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Node.js](https://img.shields.io/badge/Node.js-Backend-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
-[![React](https://img.shields.io/badge/React-Frontend-61DAFB?logo=react&logoColor=0B1120)](https://react.dev/)
-[![SQLite](https://img.shields.io/badge/SQLite-Database-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
-[![Tests](https://img.shields.io/badge/Tests-22%20passing-22C55E?logo=vitest&logoColor=white)](#testing)
-[![JWT](https://img.shields.io/badge/Auth-JWT-111827?logo=jsonwebtokens&logoColor=white)](#authentication-and-security)
+![Live operations dashboard](docs/screenshots/live-operations.png)
 
-**Internship case study Â· Cormind Â· Mini Manufacturing Execution System**
+## Features
 
-</div>
+- Machine status tracking: `RUNNING`, `DOWN`, `SETUP` and `IDLE`
+- Machine status history and availability calculation
+- Temperature, pressure and speed readings
+- Product and work order management
+- Production progress and production record analysis
+- Responsible operator selection for active work orders
+- Live view of active operations, idle operators and idle machines
+- Machine assignment and access control for operators
+- Target completion notifications
+- Demo simulation that generates status, sensor and production data
+- JWT authentication and role-based authorization
 
----
+## User roles
 
-## Overview
+| Role | Permissions |
+| --- | --- |
+| `ADMIN` | Manages machines, products, work orders, users and operator assignments. Can start the demo. |
+| `OPERATOR` | Manages assigned machines and can work on authorized production operations. |
+| `VIEWER` | Can view machines, work orders and production information without making changes. |
 
-MakineTakip is a full-stack mini Manufacturing Execution System (MES) application developed for monitoring machines in a factory environment.
+Newly registered users start with the `VIEWER` role. An administrator can change their role and assign machines to operators.
 
-It records machine status transitions and sensor readings, calculates availability and tracked production durations, generates live demo data, and protects operational endpoints with JWT-based authentication.
+## Main workflow
 
-|        Live Monitoring        |        Production Insights        |      Secure Access      |
-| :---------------------------: | :-------------------------------: | :---------------------: |
-|  Status-aware machine cards   | Availability and duration details |  Register and sign in   |
-| Auto-refreshing sensor charts |   Running and downtime tracking   | bcrypt password hashing |
-|  Status transition timeline   |  Temperature, pressure and speed  | Protected JWT endpoints |
+1. The administrator creates products and machines.
+2. Machines are assigned to operators from the user management screen.
+3. A work order is created for a product and a machine.
+4. An authorized operator is selected when the work order is started.
+5. Production records update the progress and can be examined from the analytics screen.
 
-## Highlights
+## Screenshots
 
-- **Real-time dashboard** with status-aware cards and automatic refresh
-- **Availability analytics** with running, down and tracked durations
-- **Live demo simulation** that generates realistic status and sensor activity
-- **Interactive charts** for temperature, pressure and machine speed
-- **Status timeline** showing transitions, reasons and durations
-- **Secure authentication** with bcrypt, JWT and protected API routes
-- **22 automated tests** for availability, status rules and authentication
+### Work orders
 
-## System Architecture
+Work orders can be planned, started and completed. The responsible operator is selected before starting an order.
 
-```mermaid
-flowchart LR
-    U[User] --> UI[React Dashboard]
-    UI -->|Login / Register| AUTH[Auth API]
-    AUTH -->|JWT| UI
-    UI -->|Bearer Token| MW[JWT Middleware]
-    MW --> ROUTES[Express Routes]
-    ROUTES --> CTRL[Controllers]
-    CTRL --> SRV[Services and Business Rules]
-    SRV --> ORM[TypeORM]
-    ORM --> DB[(SQLite)]
-    SIM[Demo Simulation] --> SRV
-```
+![Work order management](docs/screenshots/work-orders.png)
 
-The backend uses a layered architecture:
+### Production analytics
 
-| Layer       | Responsibility                               |
-| ----------- | -------------------------------------------- |
-| Routes      | Define API paths and HTTP methods            |
-| Controllers | Validate requests and return HTTP responses  |
-| Services    | Apply business rules and database operations |
-| Entities    | Define tables and relationships              |
-| Middleware  | Verify JWT access tokens                     |
-| Utils       | Provide reusable pure calculation logic      |
+Expected quantity, produced quantity and deviation can be followed for each production interval.
 
-## Core Features
+![Production analytics](docs/screenshots/production-analytics.png)
 
-### Machine Monitoring
+### Operator screen
 
-- Create and list machines directly from the dashboard
-- View current machine status with dynamic colors and card accents
-- Change status manually between `RUNNING`, `DOWN`, `SETUP` and `IDLE`
-- View the last transition and relative transition time
-- Open a complete chronological status timeline
-- Display downtime reasons when a machine is `DOWN`
+Operators see their assigned machines first. Other machines are still visible, but they are read-only.
 
-### Availability and Sensor Analytics
+![Operator dashboard](docs/screenshots/operator-dashboard.png)
 
-- Calculate availability for a selected time range
-- Display running, down and total tracked durations
-- Record temperature, pressure and speed readings
-- Filter sensor readings using `from` and `to` dates
-- Display current sensor values and the latest 30 readings
-- Refresh Recharts line charts automatically every 5 seconds
+## Technologies
 
-### Live Demo Simulation
+| Part | Technologies |
+| --- | --- |
+| Backend | Node.js, TypeScript, Express |
+| Database | SQLite, TypeORM, better-sqlite3 |
+| Frontend | React, TypeScript, Vite, Tailwind CSS |
+| Charts | Recharts |
+| Authentication | JWT, bcryptjs |
+| Tests and code quality | Vitest, ESLint, Prettier |
+| Container | Docker, Docker Compose, Nginx |
 
-- Start and stop the simulation from the dashboard
-- Display how long the demo has been running
-- Generate sensor readings automatically every 5 seconds
-- Change a random machine status every 20 seconds
-- Prevent consecutive identical statuses
-- Add `Automatic demo downtime` when the generated status is `DOWN`
-- Process generated events through the existing service layer and business rules
+## Running with Docker
 
-### Authentication and Security
-
-- Register, sign in and sign out from the frontend
-- Hash passwords with bcrypt before database storage
-- Return a signed JWT after successful authentication
-- Protect machine and simulation endpoints with `requireAuth`
-- Attach the token automatically to frontend API requests
-- Clear invalid or expired sessions
-- Store the JWT signing secret in an ignored `.env` file
-
-## Business Rules
-
-> Business rules are enforced in the service layer so manual API calls, frontend actions and demo simulation events follow the same behavior.
-
-1. A machine can have only one active status.
-2. The previous status is closed before the next one starts.
-3. Consecutive identical statuses are rejected.
-4. A reason is mandatory when a machine enters `DOWN`.
-5. Status timestamps must remain chronologically consistent.
-6. Status transitions run inside a database transaction.
-7. Creating a machine also creates its initial status.
-
-## Availability Calculation
-
-```text
-Availability (%) = Running Time / (Running Time + Down Time) x 100
-```
-
-The pure calculation function handles:
-
-- Empty status histories
-- Open status records
-- Records outside the requested range
-- Partially overlapping records
-- Invalid ranges and timestamps
-- `SETUP` and `IDLE` records
-
-The API response also includes `runningDuration`, `downDuration` and `totalTrackedDuration`.
-
-## Technology Stack
-
-| Area           | Technologies                          |
-| -------------- | ------------------------------------- |
-| Backend        | Node.js, TypeScript, Express          |
-| Database       | SQLite, better-sqlite3, TypeORM       |
-| Authentication | bcryptjs, JSON Web Token              |
-| Frontend       | React, TypeScript, Vite, Tailwind CSS |
-| Visualization  | Recharts                              |
-| Quality        | Vitest, ESLint, Prettier              |
-| Development    | Concurrently, Git                     |
-
-## Quick Start
+Docker is the easiest way to run the whole project.
 
 ### 1. Clone the repository
 
@@ -158,20 +81,7 @@ git clone https://github.com/Zeynepdmrdn/Makine-takip.git
 cd Makine-takip
 ```
 
-### 2. Install dependencies
-
-```bash
-npm install
-npm --prefix frontend install
-```
-
-### 3. Create the environment file
-
-macOS or Linux:
-
-```bash
-cp .env.example .env
-```
+### 2. Create the environment file
 
 Windows PowerShell:
 
@@ -179,154 +89,76 @@ Windows PowerShell:
 Copy-Item .env.example .env
 ```
 
-Generate a secure local JWT secret:
+macOS or Linux:
 
 ```bash
-node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
+cp .env.example .env
 ```
 
-Place the generated value in `.env`:
+Open `.env` and replace the example values. Do not commit this file.
 
 ```env
-JWT_SECRET=your-generated-secret
+JWT_SECRET=replace-with-a-long-random-secret
+SEED_ADMIN_NAME=Administrator
+SEED_ADMIN_EMAIL=admin@example.com
+SEED_ADMIN_PASSWORD=replace-with-a-strong-password
 ```
 
-> Never commit `.env`. Only `.env.example` should be stored in Git.
+### 3. Build and start
 
-### 4. Run the application
+```bash
+docker compose up --build -d
+```
+
+### 4. Add the initial demo data
+
+```bash
+docker compose exec backend node dist/scripts/seed.js
+```
+
+The application will be available at:
+
+- Frontend: `http://localhost:8080`
+- Backend health check: `http://localhost:8080/api/health`
+
+To stop the containers:
+
+```bash
+docker compose down
+```
+
+The SQLite database is stored in a Docker volume, so normal container restarts do not delete the data. Running `docker compose down -v` also deletes this volume and should only be used when a clean database is wanted.
+
+## Running locally
+
+Node.js is required for local development.
+
+```bash
+npm install
+npm --prefix frontend install
+```
+
+Create `.env` from `.env.example`, then start the backend and frontend together:
 
 ```bash
 npm run dev
 ```
 
-For PowerShell environments that block `npm.ps1`:
+On Windows, if PowerShell blocks `npm.ps1`, use:
 
 ```powershell
 npm.cmd run dev
 ```
 
-| Application  | Address                        |
-| ------------ | ------------------------------ |
-| Frontend     | `http://localhost:5173`        |
-| Backend      | `http://localhost:3000`        |
-| Health check | `http://localhost:3000/health` |
+Local addresses:
 
-Vite may select `5174` or `5175` if the default frontend port is occupied.
+- Frontend: `http://localhost:5173`
+- Backend: `http://localhost:3000`
+- Health check: `http://localhost:3000/health`
 
-## First Login
+## Tests and checks
 
-1. Open the frontend address shown in the terminal.
-2. Select **Register**.
-3. Enter a name, email and a password containing at least 8 characters.
-4. Registration creates the user, hashes the password and starts a JWT session.
-5. Select **Sign Out** to clear the session.
-
-## API Reference
-
-Public routes do not require a token. Protected routes require:
-
-```http
-Authorization: Bearer your-jwt-token
-```
-
-| Method | Endpoint                               | Access    | Purpose                           |
-| ------ | -------------------------------------- | --------- | --------------------------------- |
-| GET    | `/health`                              | Public    | Backend health check              |
-| POST   | `/auth/register`                       | Public    | Register and receive a JWT        |
-| POST   | `/auth/login`                          | Public    | Sign in and receive a JWT         |
-| GET    | `/machines`                            | Protected | List machines and statuses        |
-| POST   | `/machines`                            | Protected | Create a machine                  |
-| GET    | `/machines/:id`                        | Protected | Get one machine with related data |
-| POST   | `/machines/:id/status`                 | Protected | Change machine status             |
-| POST   | `/machines/:id/readings`               | Protected | Add a sensor reading              |
-| GET    | `/machines/:id/readings`               | Protected | List sensor readings              |
-| GET    | `/machines/:id/readings?from=&to=`     | Protected | Filter readings by date           |
-| GET    | `/machines/:id/availability?from=&to=` | Protected | Get availability details          |
-| GET    | `/simulation/status`                   | Protected | Get simulation state              |
-| POST   | `/simulation/start`                    | Protected | Start live demo generation        |
-| POST   | `/simulation/stop`                     | Protected | Stop live demo generation         |
-
-<details>
-<summary><strong>Example authentication requests</strong></summary>
-
-### Register
-
-```http
-POST /auth/register
-Content-Type: application/json
-```
-
-```json
-{
-  "name": "Demo User",
-  "email": "demo@example.com",
-  "password": "Password123"
-}
-```
-
-### Login
-
-```http
-POST /auth/login
-Content-Type: application/json
-```
-
-```json
-{
-  "email": "demo@example.com",
-  "password": "Password123"
-}
-```
-
-</details>
-
-<details>
-<summary><strong>Example machine requests</strong></summary>
-
-### Create a machine
-
-```json
-{
-  "name": "Cutting Machine",
-  "code": "MC-001"
-}
-```
-
-### Change status
-
-```json
-{
-  "status": "DOWN",
-  "reason": "Maintenance required"
-}
-```
-
-### Add a sensor reading
-
-```json
-{
-  "temperature": 74.5,
-  "pressure": 5.4,
-  "speed": 1250
-}
-```
-
-</details>
-
-## Testing
-
-```bash
-npm test
-```
-
-| Test group               |  Count | Coverage                                               |
-| ------------------------ | -----: | ------------------------------------------------------ |
-| Availability calculation |     10 | Ranges, overlaps, open events and invalid input        |
-| Machine status service   |      6 | Transition rules, reasons and transactions             |
-| Authentication service   |      6 | Hashing, normalization, duplicate users, login and JWT |
-| **Total**                | **22** | **All passing**                                        |
-
-Run the complete quality checks:
+The backend currently has 49 automated tests covering authentication, products, work orders, production records, machine status rules and availability calculations.
 
 ```bash
 npm run type-check
@@ -337,95 +169,32 @@ npm --prefix frontend run lint
 npm --prefix frontend run build
 ```
 
-## Available Commands
-
-| Command                | Description                         |
-| ---------------------- | ----------------------------------- |
-| `npm run dev`          | Start backend and frontend together |
-| `npm run dev:backend`  | Start only the backend              |
-| `npm run dev:frontend` | Start only the frontend             |
-| `npm run build`        | Build the backend without tests     |
-| `npm start`            | Run the compiled backend            |
-| `npm run seed`         | Insert sample development data      |
-| `npm run type-check`   | Check TypeScript types              |
-| `npm run lint`         | Run backend ESLint checks           |
-| `npm run format`       | Format files with Prettier          |
-| `npm run format-check` | Check Prettier formatting           |
-| `npm test`             | Run all tests once                  |
-| `npm run test:watch`   | Run tests in watch mode             |
-
-## Project Structure
-
-<details>
-<summary><strong>View directory layout</strong></summary>
+## Project structure
 
 ```text
 makine-takip/
-|-- frontend/
-|   `-- src/
-|       |-- components/
-|       |-- config/
-|       |-- types/
-|       `-- App.tsx
-|-- src/
-|   |-- config/
-|   |-- controllers/
-|   |-- database/
-|   |-- entities/
-|   |-- errors/
-|   |-- middleware/
-|   |-- routes/
-|   |-- scripts/
-|   |-- services/
-|   |-- utils/
-|   `-- app.ts
-|-- .env.example
-|-- package.json
-|-- tsconfig.json
-`-- tsconfig.build.json
+├── frontend/             # React application
+│   └── src/
+│       ├── components/
+│       ├── hooks/
+│       ├── config/
+│       └── types/
+├── src/                  # Express application
+│   ├── controllers/
+│   ├── database/
+│   ├── entities/
+│   ├── middleware/
+│   ├── routes/
+│   ├── scripts/
+│   ├── services/
+│   └── utils/
+├── compose.yaml
+├── Dockerfile
+└── README.md
 ```
 
-</details>
+## Notes
 
-## Technical Decisions
+This is an internship project, not a production MES product. SQLite and TypeORM synchronization kept the setup simple while I was developing the project. For a real factory deployment, database migrations, password recovery, HTTPS, logging and more detailed end-to-end tests would be needed.
 
-- **SQLite** keeps the internship case lightweight and locally reproducible.
-- **TypeORM** provides typed entities, relations and repository operations.
-- **Services** centralize business rules for API, frontend and simulation actions.
-- **Transactions** keep status closing and creation atomic.
-- **Pure functions** make availability calculations independently testable.
-- **bcryptjs** prevents plain-text password storage.
-- **JWT middleware** protects operational endpoints.
-- **React + Tailwind CSS** provide a responsive component-based interface.
-- **Recharts** displays live sensor history.
-- **Vitest** verifies calculation and service-level behavior.
-
-## Security Notes
-
-> This repository contains `.env.example`, never the real `.env` file.
-
-- Use a long random `JWT_SECRET` for every environment.
-- Use HTTPS for deployed authentication and API traffic.
-- Do not deploy local SQLite data as production data.
-- Review dependency audit results before deployment.
-
-## Known Limitations
-
-- SQLite and `synchronize: true` are intended for local development and demonstration.
-- Database migrations are not included.
-- Role-based authorization is not implemented.
-- Refresh tokens, password reset and account recovery are not implemented.
-- Pagination is not implemented for machine, status or sensor lists.
-- Frontend component and end-to-end tests are not included.
-- Recharts currently causes a production bundle size warning.
-- The application is not deployed to a production environment.
-
----
-
-<div align="center">
-
-Built as a full-stack MES internship case study.
-
-**MakineTakip Â· TypeScript Â· React Â· Express Â· SQLite**
-
-</div>
+During this project I mainly practiced building a full-stack application, separating business rules into services, working with relational data, implementing authorization and running the application with Docker.
