@@ -21,6 +21,7 @@ const localFrontendOrigins = [
   "http://localhost:5174",
   "http://localhost:5175",
   "http://localhost:8080",
+    "https://frontend-production-ab1e.up.railway.app",
 ];
 
 const configuredOrigins = (process.env.CORS_ORIGIN ?? "")
